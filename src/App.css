@@ -1,0 +1,320 @@
+/* Translation QA Engine - Custom Styles */
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Code blocks */
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.875em;
+}
+
+/* Animation for drag and drop */
+@keyframes pulse-border {
+  0%, 100% {
+    border-color: hsl(var(--primary) / 0.5);
+  }
+  50% {
+    border-color: hsl(var(--primary));
+  }
+}
+
+.drag-active {
+  animation: pulse-border 1s ease-in-out infinite;
+}
+
+/* Issue severity badges */
+.badge-error {
+  background-color: hsl(var(--destructive) / 0.1);
+  color: hsl(var(--destructive));
+  border-color: hsl(var(--destructive) / 0.2);
+}
+
+.badge-warning {
+  background-color: hsl(38 92% 50% / 0.1);
+  color: hsl(38 92% 50%);
+  border-color: hsl(38 92% 50% / 0.2);
+}
+
+.badge-info {
+  background-color: hsl(217 91% 60% / 0.1);
+  color: hsl(217 91% 60%);
+  border-color: hsl(217 91% 60% / 0.2);
+}
+
+/* Bilingual view */
+.bilingual-source {
+  background: linear-gradient(135deg, hsl(217 91% 60% / 0.05) 0%, hsl(217 91% 60% / 0.1) 100%);
+  border-left: 3px solid hsl(217 91% 60%);
+}
+
+.bilingual-target {
+  background: linear-gradient(135deg, hsl(142 76% 36% / 0.05) 0%, hsl(142 76% 36% / 0.1) 100%);
+  border-left: 3px solid hsl(142 76% 36%);
+}
+
+.bilingual-target.has-issues {
+  background: linear-gradient(135deg, hsl(0 84% 60% / 0.05) 0%, hsl(0 84% 60% / 0.1) 100%);
+  border-left: 3px solid hsl(0 84% 60%);
+}
+
+/* File list item hover effect */
+.file-item {
+  transition: all 0.2s ease;
+}
+
+.file-item:hover {
+  transform: translateX(2px);
+}
+
+/* Stats card hover */
+.stat-card {
+  transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Button hover effects */
+.btn-hover-lift {
+  transition: all 0.2s ease;
+}
+
+.btn-hover-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Issue row hover */
+.issue-row {
+  transition: background-color 0.15s ease;
+}
+
+.issue-row:hover {
+  background-color: hsl(var(--muted) / 0.5);
+}
+
+/* Toast notifications */
+[data-sonner-toast] {
+  font-family: inherit;
+}
+
+/* Dialog backdrop */
+[data-state="open"] > [data-radix-dialog-overlay] {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Dialog content */
+[data-state="open"] > [data-radix-dialog-content] {
+  animation: slideIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* Focus styles */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Selection color */
+::selection {
+  background-color: hsl(var(--primary) / 0.2);
+  color: hsl(var(--primary-foreground));
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    background: white;
+  }
+  
+  .container {
+    box-shadow: none;
+    max-width: 100%;
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .bilingual-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Dark mode adjustments */
+.dark .bilingual-source {
+  background: linear-gradient(135deg, hsl(217 91% 60% / 0.1) 0%, hsl(217 91% 60% / 0.15) 100%);
+}
+
+.dark .bilingual-target {
+  background: linear-gradient(135deg, hsl(142 76% 36% / 0.1) 0%, hsl(142 76% 36% / 0.15) 100%);
+}
+
+.dark .bilingual-target.has-issues {
+  background: linear-gradient(135deg, hsl(0 84% 60% / 0.1) 0%, hsl(0 84% 60% / 0.15) 100%);
+}
+
+/* Loading spinner */
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Tooltip animation */
+[data-radix-tooltip-content] {
+  animation: tooltipIn 0.15s ease-out;
+}
+
+@keyframes tooltipIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Checkbox animation */
+[data-state="checked"] {
+  animation: checkIn 0.15s ease-out;
+}
+
+@keyframes checkIn {
+  from {
+    transform: scale(0.8);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+/* Card hover effect */
+.card-hover {
+  transition: all 0.2s ease;
+}
+
+.card-hover:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+/* Tab indicator animation */
+[data-state="active"][role="tab"] {
+  position: relative;
+}
+
+[data-state="active"][role="tab"]::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: hsl(var(--primary));
+  animation: tabIndicator 0.2s ease-out;
+}
+
+@keyframes tabIndicator {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Progress bar animation */
+[role="progressbar"] > div {
+  transition: width 0.3s ease;
+}
+
+/* Badge hover */
+.badge-interactive {
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.badge-interactive:hover {
+  transform: scale(1.05);
+}
+
+/* Input focus animation */
+input:focus,
+textarea:focus,
+select:focus {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Scroll area fade */
+.scroll-area-fade::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: linear-gradient(to bottom, transparent, hsl(var(--background)));
+  pointer-events: none;
+}

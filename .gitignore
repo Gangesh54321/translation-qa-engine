@@ -1,0 +1,29 @@
+# node_modules
+node_modules/
+
+# local env files
+.env*.local
+
+# vercel
+.vercel
+
+# production
+dist/
+
+# log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# misc
+.DS_Store
+*.pem
+
+# typescript logs
+*.tsbuildinfo
+next-env.d.ts
+
+# brain files (avoid pushing conversation artifacts to project repo unless desired)
+.gemini/
+.agent/
+brain/

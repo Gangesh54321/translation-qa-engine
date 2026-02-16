@@ -5,8 +5,11 @@ import type {
   IssueType,
   QAConfig,
   TranslationFile,
-  GlossaryTerm
+  GlossaryTerm,
+  QACustomRule
 } from '@/types/translation';
+
+import { QA_PATTERNS, AUTO_FIX_MAP } from './regexLibrary';
 
 
 
@@ -15,6 +18,11 @@ const DEFAULT_CONFIG: QAConfig = {
     missing_translation: true,
     empty_translation: true,
     leading_trailing_spaces: true,
+    multiple_spaces: true,
+    double_punctuation: true,
+    suspicious_characters: true,
+    repeated_words: true,
+    mixed_language: true,
     inconsistent_brackets: true,
     inconsistent_placeholders: true,
     inconsistent_punctuation: true,
@@ -35,6 +43,10 @@ const DEFAULT_CONFIG: QAConfig = {
     alphanumeric_mismatch: true,
     inconsistent_source: true,
     inconsistent_target: true,
+    custom_regex_match: true,
+    blacklist_match: true,
+    forbidden_pattern: true,
+    localization_mismatch: true,
   },
 
 
@@ -45,6 +57,8 @@ const DEFAULT_CONFIG: QAConfig = {
   checkXmlTags: true,
   checkPlaceholders: true,
   caseSensitive: false,
+  customRules: [],
+  blacklist: [],
 };
 
 function generateIssueId(): string {
@@ -99,6 +113,10 @@ function checkLeadingTrailingSpaces(unit: TranslationUnit): QAIssue | null {
     if (sourceHasLeading !== targetHasLeading) issues.push('leading spaces');
     if (sourceHasTrailing !== targetHasTrailing) issues.push('trailing spaces');
 
+    const fixedTarget = (sourceHasLeading ? ' ' : '') +
+      unit.target.trim() +
+      (sourceHasTrailing ? ' ' : '');
+
     return {
       id: generateIssueId(),
       unitId: unit.id,
@@ -108,10 +126,104 @@ function checkLeadingTrailingSpaces(unit: TranslationUnit): QAIssue | null {
       source: unit.source,
       target: unit.target,
       key: unit.key,
-      suggestion: (sourceHasLeading && !targetHasLeading ? ' ' : '') +
-        unit.target.trim() +
-        (sourceHasTrailing && !targetHasTrailing ? ' ' : ''),
+      suggestion: fixedTarget,
+      autoFix: fixedTarget,
     };
+  }
+  return null;
+}
+
+// Check for multiple spaces
+function checkMultipleSpaces(unit: TranslationUnit): QAIssue | null {
+  if (QA_PATTERNS.multiple_spaces.test(unit.target) && !QA_PATTERNS.multiple_spaces.test(unit.source)) {
+    const fixedTarget = AUTO_FIX_MAP.multiple_spaces(unit.target);
+    return {
+      id: generateIssueId(),
+      unitId: unit.id,
+      type: 'multiple_spaces',
+      severity: 'warning',
+      message: 'Multiple consecutive spaces found in target',
+      source: unit.source,
+      target: unit.target,
+      key: unit.key,
+      suggestion: fixedTarget,
+      autoFix: fixedTarget,
+    };
+  }
+  return null;
+}
+
+// Check for double punctuation
+function checkDoublePunctuation(unit: TranslationUnit): QAIssue | null {
+  if (QA_PATTERNS.double_punctuation.test(unit.target) && !QA_PATTERNS.double_punctuation.test(unit.source)) {
+    const fixedTarget = AUTO_FIX_MAP.double_punctuation(unit.target);
+    return {
+      id: generateIssueId(),
+      unitId: unit.id,
+      type: 'double_punctuation',
+      severity: 'warning',
+      message: 'Double punctuation found in target',
+      source: unit.source,
+      target: unit.target,
+      key: unit.key,
+      suggestion: fixedTarget,
+      autoFix: fixedTarget,
+    };
+  }
+  return null;
+}
+
+// Check for suspicious characters
+function checkSuspiciousCharacters(unit: TranslationUnit): QAIssue | null {
+  if (QA_PATTERNS.suspicious_characters.test(unit.target)) {
+    return {
+      id: generateIssueId(),
+      unitId: unit.id,
+      type: 'suspicious_characters',
+      severity: 'error',
+      message: 'Target contains suspicious or non-printable characters',
+      source: unit.source,
+      target: unit.target,
+      key: unit.key,
+    };
+  }
+  return null;
+}
+
+// Check for repeated words
+function checkRepeatedWords(unit: TranslationUnit): QAIssue | null {
+  const match = unit.target.match(QA_PATTERNS.repeated_words);
+  if (match) {
+    return {
+      id: generateIssueId(),
+      unitId: unit.id,
+      type: 'repeated_words',
+      severity: 'warning',
+      message: `Repeated words found: ${match.join(', ')}`,
+      source: unit.source,
+      target: unit.target,
+      key: unit.key,
+    };
+  }
+  return null;
+}
+
+// Check for mixed language (heuristics)
+function checkMixedLanguage(unit: TranslationUnit): QAIssue | null {
+  // Check if target contains scripts that are not in source
+  for (const [lang, pattern] of Object.entries(QA_PATTERNS.mixed_language)) {
+    if (pattern.test(unit.target) && !pattern.test(unit.source)) {
+      return {
+        id: generateIssueId(),
+        unitId: unit.id,
+        type: 'mixed_language',
+        severity: 'warning',
+        message: `Target contains ${lang} script not found in source`,
+        source: unit.source,
+        target: unit.target,
+        key: unit.key,
+      };
+    }
   }
   return null;
 }
@@ -160,9 +272,10 @@ function checkInconsistentPlaceholders(unit: TranslationUnit): QAIssue | null {
   ];
 
   for (const pattern of placeholderPatterns) {
-    const sourcePlaceholders = unit.source.match(pattern) || [];
-    const targetPlaceholders = unit.target.match(pattern) || [];
+    const sourcePlaceholders: string[] = unit.source.match(pattern) || [];
+    const targetPlaceholders: string[] = unit.target.match(pattern) || [];
 
+    // Check count
     if (sourcePlaceholders.length !== targetPlaceholders.length) {
       return {
         id: generateIssueId(),
@@ -175,6 +288,23 @@ function checkInconsistentPlaceholders(unit: TranslationUnit): QAIssue | null {
         key: unit.key,
         suggestion: `Ensure all placeholders (${sourcePlaceholders.join(', ')}) are preserved`,
       };
+    }
+
+    // Check content
+    for (const p of sourcePlaceholders) {
+      if (!targetPlaceholders.includes(p)) {
+        return {
+          id: generateIssueId(),
+          unitId: unit.id,
+          type: 'inconsistent_placeholders',
+          severity: 'error',
+          message: `Missing placeholder: "${p}"`,
+          source: unit.source,
+          target: unit.target,
+          key: unit.key,
+          suggestion: `Add missing placeholder "${p}" to the target`,
+        };
+      }
     }
   }
   return null;
@@ -553,6 +683,11 @@ function checkKeyTermMismatch(unit: TranslationUnit, glossary: GlossaryTerm[]): 
       target: unit.target,
       key: unit.key,
       suggestion: foundTerms.map(t => t.target).join(', '),
+      highlights: {
+        source: foundTerms.map(t => t.source),
+        target: foundTerms.map(t => t.target)
+      },
+      glossaryMatches: foundTerms.map(t => ({ source: t.source, target: t.target }))
     };
   }
 
@@ -561,22 +696,22 @@ function checkKeyTermMismatch(unit: TranslationUnit, glossary: GlossaryTerm[]): 
 
 // Check for alphanumeric mismatches
 function checkAlphanumericMismatch(unit: TranslationUnit): QAIssue | null {
-  const sourceAlphas = unit.source.match(/[a-zA-Z0-9]+/g) || [];
-  const targetAlphas = unit.target.match(/[a-zA-Z0-9]+/g) || [];
+  const sourceTokens = unit.source.match(QA_PATTERNS.alphanumeric_tokens) || [];
+  const targetTokens = unit.target.match(QA_PATTERNS.alphanumeric_tokens) || [];
 
   const sourceMap: Record<string, number> = {};
-  sourceAlphas.forEach(a => sourceMap[a] = (sourceMap[a] || 0) + 1);
+  sourceTokens.forEach(a => sourceMap[a] = (sourceMap[a] || 0) + 1);
 
   const targetMap: Record<string, number> = {};
-  targetAlphas.forEach(a => targetMap[a] = (targetMap[a] || 0) + 1);
+  targetTokens.forEach(a => targetMap[a] = (targetMap[a] || 0) + 1);
 
-  const missingInTarget = sourceAlphas.filter(a => !targetMap[a]);
-  const extraInTarget = targetAlphas.filter(a => !sourceMap[a]);
+  const missingInTarget = Array.from(new Set(sourceTokens.filter(a => (targetMap[a] || 0) < sourceMap[a])));
+  const extraInTarget = Array.from(new Set(targetTokens.filter(a => (sourceMap[a] || 0) < targetMap[a])));
 
   if (missingInTarget.length > 0 || extraInTarget.length > 0) {
     let msg = 'Alphanumeric mismatch.';
-    if (missingInTarget.length > 0) msg += ` Missing in target: ${Array.from(new Set(missingInTarget)).join(', ')}.`;
-    if (extraInTarget.length > 0) msg += ` Extra in target: ${Array.from(new Set(extraInTarget)).join(', ')}.`;
+    if (missingInTarget.length > 0) msg += ` Missing or count mismatch in target: ${missingInTarget.join(', ')}.`;
+    if (extraInTarget.length > 0) msg += ` Extra or count mismatch in target: ${extraInTarget.join(', ')}.`;
 
     return {
       id: generateIssueId(),
@@ -594,14 +729,15 @@ function checkAlphanumericMismatch(unit: TranslationUnit): QAIssue | null {
 
 // Check for inconsistent source
 function checkInconsistentSource(unit: TranslationUnit, allUnits: TranslationUnit[]): QAIssue | null {
-  const duplicates = allUnits.filter(u => u.id !== unit.id && u.target === unit.target && u.source !== unit.source);
-  if (duplicates.length > 0) {
+  // Same target, different source
+  const inconsistency = allUnits.find(u => u.id !== unit.id && u.target === unit.target && u.source !== unit.source && unit.target !== '');
+  if (inconsistency) {
     return {
       id: generateIssueId(),
       unitId: unit.id,
       type: 'inconsistent_source',
       severity: 'warning',
-      message: 'Inconsistent source: the same translation is used for different source texts.',
+      message: `Inconsistent source: Same translation used for different source texts. Also found for: "${inconsistency.source}"`,
       source: unit.source,
       target: unit.target,
       key: unit.key,
@@ -612,19 +748,93 @@ function checkInconsistentSource(unit: TranslationUnit, allUnits: TranslationUni
 
 // Check for inconsistent target
 function checkInconsistentTarget(unit: TranslationUnit, allUnits: TranslationUnit[]): QAIssue | null {
-  const duplicates = allUnits.filter(u => u.id !== unit.id && u.source === unit.source && u.target !== unit.target);
-  if (duplicates.length > 0) {
+  // Same source, different target
+  const inconsistency = allUnits.find(u => u.id !== unit.id && u.source === unit.source && u.target !== unit.target);
+  if (inconsistency) {
+    const isMissing = !unit.target || unit.target.trim() === '';
     return {
       id: generateIssueId(),
       unitId: unit.id,
       type: 'inconsistent_target',
       severity: 'warning',
-      message: 'Inconsistent target: the same source text has multiple different translations.',
+      message: isMissing
+        ? 'Missing translation in repeated segment: This source is translated elsewhere.'
+        : `Inconsistent target: Same source has different translations. Also translated as: "${inconsistency.target}"`,
       source: unit.source,
       target: unit.target,
       key: unit.key,
+      suggestion: inconsistency.target || undefined,
     };
   }
+  return null;
+}
+
+// Check for custom regex rules
+function checkCustomRules(unit: TranslationUnit, customRules: QACustomRule[]): QAIssue[] {
+  const issues: QAIssue[] = [];
+  if (!customRules) return issues;
+
+  for (const rule of customRules) {
+    try {
+      const regex = new RegExp(rule.pattern, 'i');
+      const matches = regex.test(unit.target);
+
+      if ((rule.type === 'forbidden' && matches) || (rule.type === 'required' && !matches)) {
+        issues.push({
+          id: generateIssueId(),
+          unitId: unit.id,
+          type: 'custom_regex_match',
+          severity: rule.severity,
+          message: rule.message || `${rule.name}: ${rule.type === 'forbidden' ? 'Forbidden' : 'Required'} pattern mismatch`,
+          source: unit.source,
+          target: unit.target,
+          key: unit.key,
+        });
+      }
+    } catch (e) {
+      console.error(`Invalid regex in rule ${rule.name}: ${rule.pattern}`);
+    }
+  }
+  return issues;
+}
+
+// Check for blacklist terms
+function checkBlacklist(unit: TranslationUnit, blacklist: string[]): QAIssue[] {
+  const issues: QAIssue[] = [];
+  if (!blacklist) return issues;
+
+  for (const term of blacklist) {
+    const regex = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    if (regex.test(unit.target)) {
+      issues.push({
+        id: generateIssueId(),
+        unitId: unit.id,
+        type: 'blacklist_match',
+        severity: 'error',
+        message: `Forbidden term found: "${term}"`,
+        source: unit.source,
+        target: unit.target,
+        key: unit.key,
+      });
+    }
+  }
+  return issues;
+}
+
+// Check for localization mismatches (simplified)
+function checkLocalization(unit: TranslationUnit, config: QAConfig): QAIssue | null {
+  if (!config.localization) return null;
+
+  const { allowedUnits } = config.localization;
+
+  if (allowedUnits && allowedUnits.length > 0) {
+    // Check if imperial units are used when metric is expected (or vice versa)
+    // This is a placeholder for more complex localization logic
+    if (QA_PATTERNS.units.imperial.test(unit.target) && !QA_PATTERNS.units.imperial.test(unit.source)) {
+      // Potential conversion issue
+    }
+  }
+
   return null;
 }
 
@@ -637,6 +847,11 @@ export function checkUnit(unit: TranslationUnit, allUnits: TranslationUnit[], co
     { check: () => checkMissingTranslation(unit), rule: 'missing_translation' },
     { check: () => checkEmptyTranslation(unit), rule: 'empty_translation' },
     { check: () => checkLeadingTrailingSpaces(unit), rule: 'leading_trailing_spaces' },
+    { check: () => checkMultipleSpaces(unit), rule: 'multiple_spaces' },
+    { check: () => checkDoublePunctuation(unit), rule: 'double_punctuation' },
+    { check: () => checkSuspiciousCharacters(unit), rule: 'suspicious_characters' },
+    { check: () => checkRepeatedWords(unit), rule: 'repeated_words' },
+    { check: () => checkMixedLanguage(unit), rule: 'mixed_language' },
     { check: () => checkInconsistentBrackets(unit), rule: 'inconsistent_brackets' },
     { check: () => checkInconsistentPlaceholders(unit), rule: 'inconsistent_placeholders' },
     { check: () => checkInconsistentPunctuation(unit), rule: 'inconsistent_punctuation' },
@@ -657,8 +872,6 @@ export function checkUnit(unit: TranslationUnit, allUnits: TranslationUnit[], co
     { check: () => checkInconsistentTarget(unit, allUnits), rule: 'inconsistent_target' },
   ];
 
-
-
   for (const { check, rule } of checks) {
     if (rules[rule]) {
       const issue = check();
@@ -666,6 +879,25 @@ export function checkUnit(unit: TranslationUnit, allUnits: TranslationUnit[], co
         issue.index = unit.index;
         issues.push(issue);
       }
+    }
+  }
+
+  // Handle checks that return multiple issues
+  if (rules.custom_regex_match) {
+    const customIssues = checkCustomRules(unit, config.customRules || []);
+    issues.push(...customIssues.map(i => ({ ...i, index: unit.index })));
+  }
+
+  if (rules.blacklist_match) {
+    const blacklistIssues = checkBlacklist(unit, config.blacklist || []);
+    issues.push(...blacklistIssues.map(i => ({ ...i, index: unit.index })));
+  }
+
+  if (rules.localization_mismatch) {
+    const locIssue = checkLocalization(unit, config);
+    if (locIssue) {
+      locIssue.index = unit.index;
+      issues.push(locIssue);
     }
   }
 

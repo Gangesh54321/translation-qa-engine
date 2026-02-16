@@ -44,7 +44,12 @@ export type FileType =
   | 'resx'
   | 'csv'
   | 'tmx'
-  | 'tsv';
+  | 'tsv'
+  | 'txt'
+  | 'tbx'
+  | 'ttx'
+  | 'mqxliff'
+  | 'tipp';
 
 export interface QAIssue {
   id: string;
@@ -56,12 +61,21 @@ export interface QAIssue {
   target: string;
   key: string;
   suggestion?: string;
+  autoFix?: string; // Content to replace the target with if auto-fixed
   index?: number;
   position?: {
 
     line?: number;
     column?: number;
   };
+  highlights?: {
+    source: string[];
+    target: string[];
+  };
+  glossaryMatches?: {
+    source: string;
+    target: string;
+  }[];
 }
 
 
@@ -69,6 +83,11 @@ export type IssueType =
   | 'missing_translation'
   | 'empty_translation'
   | 'leading_trailing_spaces'
+  | 'multiple_spaces'
+  | 'double_punctuation'
+  | 'suspicious_characters'
+  | 'repeated_words'
+  | 'mixed_language'
   | 'inconsistent_brackets'
   | 'inconsistent_placeholders'
   | 'inconsistent_punctuation'
@@ -88,7 +107,11 @@ export type IssueType =
   | 'key_term_mismatch'
   | 'alphanumeric_mismatch'
   | 'inconsistent_source'
-  | 'inconsistent_target';
+  | 'inconsistent_target'
+  | 'custom_regex_match'
+  | 'blacklist_match'
+  | 'forbidden_pattern'
+  | 'localization_mismatch';
 
 
 
@@ -126,6 +149,25 @@ export interface QAConfig {
   checkPlaceholders: boolean;
   caseSensitive: boolean;
   glossary?: GlossaryTerm[];
+
+  // New configuration fields
+  customRules?: QACustomRule[];
+  blacklist?: string[];
+  localization?: {
+    locale: string;
+    dateFormat?: string;
+    numberFormat?: string;
+    allowedUnits?: string[];
+  };
+}
+
+export interface QACustomRule {
+  id: string;
+  name: string;
+  pattern: string; // Regex pattern
+  type: 'forbidden' | 'required';
+  severity: 'error' | 'warning' | 'info';
+  message: string;
 }
 
 
@@ -160,6 +202,11 @@ export const SUPPORTED_FILE_EXTENSIONS: Record<string, FileType> = {
   '.csv': 'csv',
   '.tmx': 'tmx',
   '.tsv': 'tsv',
+  '.txt': 'txt',
+  '.tbx': 'tbx',
+  '.ttx': 'ttx',
+  '.mqxliff': 'mqxliff',
+  '.tipp': 'tipp',
 };
 
 export const FILE_TYPE_LABELS: Record<FileType, string> = {
@@ -177,12 +224,22 @@ export const FILE_TYPE_LABELS: Record<FileType, string> = {
   csv: 'CSV',
   tmx: 'TMX',
   tsv: 'TSV',
+  txt: 'Plain Text',
+  tbx: 'TBX/MARTIF',
+  ttx: 'Trados TTX',
+  mqxliff: 'MemoQ XLIFF',
+  tipp: 'TIPP',
 };
 
 export const ISSUE_TYPE_LABELS: Record<IssueType, string> = {
   missing_translation: 'Missing Translation',
   empty_translation: 'Empty Translation',
   leading_trailing_spaces: 'Leading/Trailing Spaces',
+  multiple_spaces: 'Multiple Spaces',
+  double_punctuation: 'Double Punctuation',
+  suspicious_characters: 'Suspicious Characters',
+  repeated_words: 'Repeated Words',
+  mixed_language: 'Mixed Language',
   inconsistent_brackets: 'Inconsistent Brackets',
   inconsistent_placeholders: 'Inconsistent Placeholders',
   inconsistent_punctuation: 'Inconsistent Punctuation',
@@ -203,6 +260,10 @@ export const ISSUE_TYPE_LABELS: Record<IssueType, string> = {
   alphanumeric_mismatch: 'Alphanumeric Mismatch',
   inconsistent_source: 'Inconsistent Source',
   inconsistent_target: 'Inconsistent Target',
+  custom_regex_match: 'Custom Regex Match',
+  blacklist_match: 'Blacklist Term Found',
+  forbidden_pattern: 'Forbidden Pattern',
+  localization_mismatch: 'Localization Mismatch',
 };
 
 

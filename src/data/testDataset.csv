@@ -1,0 +1,10 @@
+Key,Source,Target
+missing_translation,"Process with missing translation",
+multiple_spaces,"This has one space.","This  has  two  spaces."
+double_punctuation,"Wait!","Wait!!"
+repeated_words,"The the issue.","The the issue."
+mixed_language,"Hello world.","Hello 世界."
+leading_spaces," Leading space","Leading space"
+inconsistent_placeholders,"User {0} logged in.","User {1} logged in."
+untranslated_text,"This is a long sentence that should be translated.","This is a long sentence that should be translated."
+suspicious_chars,"Clear text","Clear text "

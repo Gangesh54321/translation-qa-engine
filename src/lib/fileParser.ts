@@ -437,6 +437,40 @@ function parseCSV(content: string, fileName: string, delimiter = ','): Translati
   };
 }
 
+// TXT Parser (Plain text or tab-delimited)
+function parseTXT(content: string, fileName: string): TranslationFile {
+  const units: TranslationUnit[] = [];
+  const lines = content.split(/\r?\n/).filter(line => line.trim() !== '');
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    // Try tab first
+    const parts = line.split('\t');
+    let source = parts[0];
+    let target = parts.length > 1 ? parts[1] : parts[0];
+
+    units.push({
+      id: generateId(),
+      key: `line_${i + 1}`,
+      source,
+      target,
+      filePath: fileName,
+      index: i + 1,
+    });
+  }
+
+  return {
+    id: generateId(),
+    name: fileName,
+    type: 'txt',
+    sourceLanguage: 'en',
+    targetLanguage: '',
+    units,
+    uploadedAt: new Date(),
+    size: content.length,
+  };
+}
+
 function parseCSVLine(line: string, delimiter: string): string[] {
   const result: string[] = [];
   let current = '';
@@ -563,6 +597,119 @@ function parseTMX(content: string, fileName: string): TranslationFile {
   };
 }
 
+// TBX Parser
+function parseTBX(content: string, fileName: string): TranslationFile {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(content, 'application/xml');
+
+  if (doc.getElementsByTagName('parsererror').length > 0) {
+    throw new FileParserError('Invalid TBX format', fileName);
+  }
+
+  const units: TranslationUnit[] = [];
+  const termEntries = doc.getElementsByTagName('termEntry');
+
+  for (let i = 0; i < termEntries.length; i++) {
+    const entry = termEntries[i];
+    const id = entry.getAttribute('id') || `term_${i}`;
+    const langSets = entry.getElementsByTagName('langSet');
+
+    let source = '';
+    let target = '';
+
+    for (let j = 0; j < langSets.length; j++) {
+      const langSet = langSets[j];
+      const lang = langSet.getAttribute('xml:lang') || langSet.getAttribute('lang') || '';
+      const term = langSet.getElementsByTagName('term')[0]?.textContent || '';
+
+      if (lang.toLowerCase().startsWith('en') || j === 0) {
+        if (!source) source = term;
+        else if (j > 0) target = term;
+      } else {
+        target = term;
+      }
+    }
+
+    if (source) {
+      units.push({
+        id: generateId(),
+        key: id,
+        source,
+        target,
+        filePath: fileName,
+        index: units.length + 1,
+      });
+    }
+  }
+
+  return {
+    id: generateId(),
+    name: fileName,
+    type: 'tbx',
+    sourceLanguage: 'en',
+    targetLanguage: '',
+    units,
+    uploadedAt: new Date(),
+    size: content.length,
+  };
+}
+
+// TTX Parser (Trados TagEditor)
+function parseTTX(content: string, fileName: string): TranslationFile {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(content, 'application/xml');
+
+  if (doc.getElementsByTagName('parsererror').length > 0) {
+    throw new FileParserError('Invalid TTX format', fileName);
+  }
+
+  const units: TranslationUnit[] = [];
+  const tuElements = doc.getElementsByTagName('tu');
+
+  for (let i = 0; i < tuElements.length; i++) {
+    const tu = tuElements[i];
+    const tuvElements = tu.getElementsByTagName('tuv');
+
+    let source = '';
+    let target = '';
+
+    for (let j = 0; j < tuvElements.length; j++) {
+      const tuv = tuvElements[j];
+      // TTX segments are usually inside <seg>
+      const seg = tuv.getElementsByTagName('seg')[0];
+      const text = seg?.textContent || '';
+
+      if (j === 0) {
+        source = text;
+      } else {
+        target = text;
+      }
+    }
+
+    if (source) {
+      units.push({
+        id: generateId(),
+        key: `tu_${i}`,
+        source,
+        target,
+        filePath: fileName,
+        index: units.length + 1,
+      });
+    }
+  }
+
+  return {
+    id: generateId(),
+    name: fileName,
+    type: 'ttx',
+    sourceLanguage: 'en',
+    targetLanguage: '',
+    units,
+    uploadedAt: new Date(),
+    size: content.length,
+  };
+}
+
 // Main parse function
 export async function parseFile(file: File): Promise<TranslationFile> {
   return new Promise((resolve, reject) => {
@@ -614,11 +761,29 @@ export async function parseFile(file: File): Promise<TranslationFile> {
           case 'tsv':
             result = parseCSV(content, file.name, '\t');
             break;
+          case 'txt':
+            result = parseTXT(content, file.name);
+            break;
           case 'resx':
             result = parseRESX(content, file.name);
             break;
           case 'tmx':
             result = parseTMX(content, file.name);
+            break;
+          case 'tbx':
+            result = parseTBX(content, file.name);
+            break;
+          case 'ttx':
+            result = parseTTX(content, file.name);
+            break;
+          case 'mqxliff':
+            result = parseXLIFF(content, file.name);
+            result.type = 'mqxliff';
+            break;
+          case 'tipp':
+            // TIPP is often a package, but if it's the XML payload:
+            result = parseXLIFF(content, file.name);
+            result.type = 'tipp';
             break;
           default:
             throw new FileParserError(`Parser not implemented for type: ${fileType}`, file.name);

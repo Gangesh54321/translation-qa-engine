@@ -1,0 +1,74 @@
+[
+    {
+        "id": "1",
+        "key": "missing_translation",
+        "source": "Process with missing translation",
+        "target": "",
+        "index": 0,
+        "filePath": "test.json"
+    },
+    {
+        "id": "2",
+        "key": "multiple_spaces",
+        "source": "This has one space.",
+        "target": "This  has  two  spaces.",
+        "index": 1,
+        "filePath": "test.json"
+    },
+    {
+        "id": "3",
+        "key": "double_punctuation",
+        "source": "Wait!",
+        "target": "Wait!!",
+        "index": 2,
+        "filePath": "test.json"
+    },
+    {
+        "id": "4",
+        "key": "repeated_words",
+        "source": "The the issue.",
+        "target": "The the issue.",
+        "index": 3,
+        "filePath": "test.json"
+    },
+    {
+        "id": "5",
+        "key": "mixed_language",
+        "source": "Hello world.",
+        "target": "Hello 世界.",
+        "index": 4,
+        "filePath": "test.json"
+    },
+    {
+        "id": "6",
+        "key": "leading_spaces",
+        "source": " Leading space",
+        "target": "Leading space",
+        "index": 5,
+        "filePath": "test.json"
+    },
+    {
+        "id": "7",
+        "key": "inconsistent_placeholders",
+        "source": "User {0} logged in.",
+        "target": "User {1} logged in.",
+        "index": 6,
+        "filePath": "test.json"
+    },
+    {
+        "id": "8",
+        "key": "untranslated_text",
+        "source": "This is a long sentence that should be translated.",
+        "target": "This is a long sentence that should be translated.",
+        "index": 7,
+        "filePath": "test.json"
+    },
+    {
+        "id": "9",
+        "key": "suspicious_chars",
+        "source": "Clear text",
+        "target": "Clear text\u0000",
+        "index": 8,
+        "filePath": "test.json"
+    }
+]

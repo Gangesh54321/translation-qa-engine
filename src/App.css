@@ -32,9 +32,12 @@ code {
 
 /* Animation for drag and drop */
 @keyframes pulse-border {
-  0%, 100% {
+
+  0%,
+  100% {
     border-color: hsl(var(--primary) / 0.5);
   }
+
   50% {
     border-color: hsl(var(--primary));
   }
@@ -58,26 +61,11 @@ code {
 }
 
 .badge-info {
-  background-color: hsl(217 91% 60% / 0.1);
-  color: hsl(217 91% 60%);
-  border-color: hsl(217 91% 60% / 0.2);
+  background-color: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+  border-color: hsl(var(--primary) / 0.2);
 }
 
-/* Bilingual view */
-.bilingual-source {
-  background: linear-gradient(135deg, hsl(217 91% 60% / 0.05) 0%, hsl(217 91% 60% / 0.1) 100%);
-  border-left: 3px solid hsl(217 91% 60%);
-}
-
-.bilingual-target {
-  background: linear-gradient(135deg, hsl(142 76% 36% / 0.05) 0%, hsl(142 76% 36% / 0.1) 100%);
-  border-left: 3px solid hsl(142 76% 36%);
-}
-
-.bilingual-target.has-issues {
-  background: linear-gradient(135deg, hsl(0 84% 60% / 0.05) 0%, hsl(0 84% 60% / 0.1) 100%);
-  border-left: 3px solid hsl(0 84% 60%);
-}
 
 /* File list item hover effect */
 .file-item {
@@ -123,7 +111,7 @@ code {
 }
 
 /* Dialog backdrop */
-[data-state="open"] > [data-radix-dialog-overlay] {
+[data-state="open"]>[data-radix-dialog-overlay] {
   animation: fadeIn 0.2s ease-out;
 }
 
@@ -131,13 +119,14 @@ code {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
 }
 
 /* Dialog content */
-[data-state="open"] > [data-radix-dialog-content] {
+[data-state="open"]>[data-radix-dialog-content] {
   animation: slideIn 0.2s ease-out;
 }
 
@@ -146,6 +135,7 @@ code {
     opacity: 0;
     transform: translate(-50%, -48%) scale(0.96);
   }
+
   to {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
@@ -172,11 +162,11 @@ textarea:focus-visible {
   .no-print {
     display: none !important;
   }
-  
+
   body {
     background: white;
   }
-  
+
   .container {
     box-shadow: none;
     max-width: 100%;
@@ -188,7 +178,7 @@ textarea:focus-visible {
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .bilingual-grid {
     grid-template-columns: 1fr;
   }
@@ -216,6 +206,7 @@ textarea:focus-visible {
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
@@ -231,6 +222,7 @@ textarea:focus-visible {
     opacity: 0;
     transform: translateY(4px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -246,6 +238,7 @@ textarea:focus-visible {
   from {
     transform: scale(0.8);
   }
+
   to {
     transform: scale(1);
   }
@@ -280,13 +273,14 @@ textarea:focus-visible {
   from {
     transform: scaleX(0);
   }
+
   to {
     transform: scaleX(1);
   }
 }
 
 /* Progress bar animation */
-[role="progressbar"] > div {
+[role="progressbar"]>div {
   transition: width 0.3s ease;
 }
 

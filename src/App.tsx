@@ -628,7 +628,7 @@ function App() {
                   </h2>
                   <p className="text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
                     Identify inconsistencies, formatting issues, and translation errors instantly.
-                    Experience Xbench-style checks in a modern, streamlined interface.
+                    Experience professional-grade checks in a modern, streamlined interface.
                   </p>
                 </div>
 
@@ -1020,7 +1020,7 @@ function App() {
             <DialogHeader className="px-6 pt-6">
               <DialogTitle className="text-2xl font-black">Audit Preferences</DialogTitle>
               <DialogDescription>
-                Customize which Xbench-style checks are applied during the QA engine process.
+                Customize which comprehensive quality checks are applied during the QA engine process.
               </DialogDescription>
             </DialogHeader>
             <ScrollArea className="h-[50vh] px-6">

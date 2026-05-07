@@ -1,14 +1,13 @@
 import ExcelJS from 'exceljs';
-import type { QAResult, IssueType, QAConfig, QAIssue } from '@/types/translation';
+import type { QAResult, IssueType, QAConfig, QAIssue, TranslationFile } from '@/types/translation';
 import { ISSUE_TYPE_LABELS } from '@/types/translation';
 
 export const BASIC_ISSUES: IssueType[] = [
-    'missing_translation',
-    'empty_translation',
-    'inconsistent_source',
-    'inconsistent_target',
-    'target_same_as_source',
-    'untranslated_text'
+    'seg_untranslated',
+    'seg_empty',
+    'consist_identical_source',
+    'consist_terminology',
+    'seg_source_copied'
 ];
 
 export function getCategory(type: IssueType): 'Basic' | 'Content' {
@@ -79,7 +78,7 @@ export async function exportToExcel(resultOrResults: QAResult | QAResult[], conf
 
                 issues.forEach(issue => {
                     let comments = '';
-                    if (issue.type === 'key_term_mismatch' && issue.glossaryMatches) {
+                    if (issue.type === 'term_translation_mismatch' && issue.glossaryMatches) {
                         comments = issue.glossaryMatches.map(m => `Glossary: ${m.source} -> ${m.target}`).join('; ');
                     }
                     const row = worksheet.addRow([`${result.fileName}_#${issue.index || issue.key}`, issue.source, issue.target, comments]);
@@ -111,7 +110,7 @@ export async function exportToExcel(resultOrResults: QAResult | QAResult[], conf
 
             issues.forEach(issue => {
                 let comments = '';
-                if (issue.type === 'key_term_mismatch' && issue.glossaryMatches) {
+                if (issue.type === 'term_translation_mismatch' && issue.glossaryMatches) {
                     comments = issue.glossaryMatches.map(m => `Glossary: ${m.source} -> ${m.target}`).join('; ');
                 }
                 const row = worksheet.addRow([`${issue.fileName}_#${issue.index || issue.key}`, issue.source, issue.target, comments]);
@@ -146,18 +145,39 @@ export function exportToHTML(resultOrResults: QAResult | QAResult[], config: QAC
     const isCombined = results.length > 1;
 
     const highlightInHtml = (text: string, highlights?: string[], type: 'source' | 'target' = 'source') => {
-        if (!highlights || highlights.length === 0) return text;
-        let result = text;
-        highlights.forEach(term => {
-            const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const className = type === 'source' ? 'hl-source' : 'hl-target';
-            result = result.replace(new RegExp(`(${escaped})`, 'gi'), `<span class="${className}">$1</span>`);
-        });
-        return result;
+        if (!text) return '';
+        
+        const tagRegex = /(<[^>]+>)/g;
+        const parts = text.split(tagRegex);
+        
+        const processTextPart = (content: string) => {
+            if (!highlights || highlights.length === 0) return content;
+            let res = content;
+            highlights.forEach(term => {
+                const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const className = type === 'source' ? 'hl-source' : 'hl-target';
+                res = res.replace(new RegExp(`(${escaped})`, 'gi'), `<span class="${className}">$1</span>`);
+            });
+            return res;
+        };
+
+        return parts.map(part => {
+            if (part.startsWith('<') && part.endsWith('>')) {
+                const xMatch = part.match(/<x\s+[^>]*id="([^"]*)"[^>]*\/?>/i);
+                const gMatch = part.match(/<g\s+[^>]*id="([^"]*)"[^>]*>/i);
+                const gEndMatch = part.match(/<\/g>/i);
+                
+                if (xMatch) return `<span class="pink-tag">[${xMatch[1]}]</span>`;
+                if (gMatch) return `<span class="pink-tag">[${gMatch[1]}]</span>`;
+                if (gEndMatch) return `<span class="pink-tag">[/]</span>`;
+                return `<span class="pink-tag">${part}</span>`;
+            }
+            return processTextPart(part);
+        }).join('');
     };
 
     const renderGlossaryMatches = (issue: QAIssue) => {
-        if (issue.type !== 'key_term_mismatch' || !issue.glossaryMatches || issue.glossaryMatches.length === 0) return '';
+        if (issue.type !== 'term_translation_mismatch' || !issue.glossaryMatches || issue.glossaryMatches.length === 0) return '';
         return `
             <div class="glossary-info">
                 <strong>Glossary Reference:</strong>
@@ -283,6 +303,8 @@ export function exportToHTML(resultOrResults: QAResult | QAResult[], config: QAC
             .hl-source { background: rgba(99, 102, 241, 0.2); color: #4338ca; font-weight: bold; padding: 0 2px; border-radius: 2px; }
             .hl-target { background: rgba(245, 158, 11, 0.2); color: #b45309; font-weight: bold; padding: 0 2px; border-radius: 2px; }
             
+            .pink-tag { color: #ec4899; font-weight: bold; background: rgba(236, 72, 153, 0.1); padding: 0 2px; border-radius: 2px; }
+            
             .glossary-info { margin-top: 8px; font-size: 10px; color: #666; background: #fdf6e3; padding: 6px; border-radius: 4px; border: 1px solid #eee8d5; }
             .glossary-tag { display: inline-block; background: #eee8d5; color: #586e75; padding: 2px 6px; border-radius: 10px; margin-left: 5px; font-weight: bold; }
         `,
@@ -345,6 +367,73 @@ export function exportToHTML(resultOrResults: QAResult | QAResult[], config: QAC
     a.href = url;
     const outName = isCombined ? 'QA_Combined_Report' : `QA_Report_${results[0].fileName}`;
     a.download = `${outName}_${theme}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+/**
+ * Export bilingual content to a 2-column RTF table for manual review
+ */
+export function exportToRTF(fileOrFiles: TranslationFile | TranslationFile[]) {
+    const fileList = Array.isArray(fileOrFiles) ? fileOrFiles : [fileOrFiles];
+    const isCombined = fileList.length > 1;
+
+    const escapeRTF = (str: string): string => {
+        if (!str) return '';
+        // Escape RTF control characters and handle Unicode
+        return str
+            .replace(/\\/g, '\\\\')
+            .replace(/{/g, '\\{')
+            .replace(/}/g, '\\}')
+            .split('')
+            .map(char => {
+                const code = char.charCodeAt(0);
+                if (code > 127) {
+                    // RTF Unicode is signed 16-bit
+                    const signedCode = code > 32767 ? code - 65536 : code;
+                    return `\\u${signedCode}?`;
+                }
+                return char;
+            })
+            .join('');
+    };
+
+    let rtf = '{\\rtf1\\ansi\\deff0\n';
+    rtf += '{\\fonttbl{\\f0\\fnil\\fcharset0 Arial;}{\\f1\\fnil\\fcharset1 Arial Unicode MS;}}\n';
+    
+    // Header
+    rtf += '\\b\\fs32 Bilingual Review Report\\b0\\fs20\\par\n';
+    rtf += `Generated: ${new Date().toLocaleString()}\\par\\par\n`;
+
+    fileList.forEach(file => {
+        rtf += `\\b\\fs24 File: ${escapeRTF(file.name)}\\b0\\fs20\\par\\par\n`;
+        
+        // Table setup: ID (1.5"), Source (3"), Target (3")
+        // Twips (1/1440 inch): 1.5" = 2160, 4.5" = 6480, 7.5" = 10800
+        const rowDef = '\\trowd\\trgaph108\\trleft-108' +
+                      '\\clbrdrt\\brdrs\\brdrw10 \\clbrdrl\\brdrs\\brdrw10 \\clbrdrb\\brdrs\\brdrw10 \\clbrdrr\\brdrs\\brdrw10 \\cellx2160' +
+                      '\\clbrdrt\\brdrs\\brdrw10 \\clbrdrl\\brdrs\\brdrw10 \\clbrdrb\\brdrs\\brdrw10 \\clbrdrr\\brdrs\\brdrw10 \\cellx6480' +
+                      '\\clbrdrt\\brdrs\\brdrw10 \\clbrdrl\\brdrs\\brdrw10 \\clbrdrb\\brdrs\\brdrw10 \\clbrdrr\\brdrs\\brdrw10 \\cellx10800';
+
+        // Table Header
+        rtf += rowDef + '\\b ID\\b0 \\cell \\b Source Content\\b0 \\cell \\b Target Translation\\b0 \\cell\\row\n';
+
+        file.units.forEach(unit => {
+            rtf += rowDef + 
+                   `${unit.index || unit.key} \\cell ${escapeRTF(unit.source)} \\cell ${escapeRTF(unit.target)} \\cell\\row\n`;
+        });
+        
+        rtf += '\\par\\page\n';
+    });
+
+    rtf += '}';
+
+    const blob = new Blob([rtf], { type: 'application/rtf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const outName = isCombined ? 'Bilingual_Review_Combined' : `Bilingual_Review_${fileList[0].name.split('.')[0]}`;
+    a.download = `${outName}_${new Date().getTime()}.rtf`;
     a.click();
     URL.revokeObjectURL(url);
 }

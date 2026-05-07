@@ -3,8 +3,8 @@ import { getCategory } from './exportService';
 import type { IssueType } from '@/types/translation';
 
 describe('Export Service Categorization', () => {
-    it('should categorize missing_translation as Basic', () => {
-        expect(getCategory('missing_translation')).toBe('Basic');
+    it('should categorize seg_untranslated as Basic', () => {
+        expect(getCategory('seg_untranslated')).toBe('Basic');
     });
 
     it('should categorize suspicious_characters as Content', () => {
@@ -15,8 +15,8 @@ describe('Export Service Categorization', () => {
         expect(getCategory('inconsistent_placeholders')).toBe('Content');
     });
 
-    it('should categorize target_same_as_source as Basic', () => {
-        expect(getCategory('target_same_as_source')).toBe('Basic');
+    it('should categorize seg_source_copied as Basic', () => {
+        expect(getCategory('seg_source_copied')).toBe('Basic');
     });
 
     it('should categorize arbitrary Content issues correctly', () => {

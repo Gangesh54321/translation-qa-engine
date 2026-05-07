@@ -1,0 +1,630 @@
+[
+  {
+    "locale": "af_ZA",
+    "files": [
+      "af_ZA.dic",
+      "hyph_af_ZA.dic",
+      "af_ZA.aff"
+    ],
+    "path": "/dictionaries/af_ZA/"
+  },
+  {
+    "locale": "an_ES",
+    "files": [
+      "an_ES.dic",
+      "an_ES.aff"
+    ],
+    "path": "/dictionaries/an_ES/"
+  },
+  {
+    "locale": "ar",
+    "files": [
+      "ar.dic",
+      "ar.aff"
+    ],
+    "path": "/dictionaries/ar/"
+  },
+  {
+    "locale": "as_IN",
+    "files": [
+      "as_IN.dic",
+      "hyph_as_IN.dic",
+      "as_IN.aff"
+    ],
+    "path": "/dictionaries/as_IN/"
+  },
+  {
+    "locale": "be_BY",
+    "files": [
+      "be-official.dic",
+      "hyph_be_BY.dic",
+      "be-official.aff"
+    ],
+    "path": "/dictionaries/be_BY/"
+  },
+  {
+    "locale": "bg_BG",
+    "files": [
+      "bg_BG.dic",
+      "hyph_bg_BG.dic",
+      "bg_BG.aff"
+    ],
+    "path": "/dictionaries/bg_BG/"
+  },
+  {
+    "locale": "bn_BD",
+    "files": [
+      "bn_BD.dic",
+      "bn_BD.aff"
+    ],
+    "path": "/dictionaries/bn_BD/"
+  },
+  {
+    "locale": "bo",
+    "files": [
+      "bo.dic",
+      "bo.aff"
+    ],
+    "path": "/dictionaries/bo/"
+  },
+  {
+    "locale": "br_FR",
+    "files": [
+      "br_FR.dic",
+      "br_FR.aff"
+    ],
+    "path": "/dictionaries/br_FR/"
+  },
+  {
+    "locale": "bs_BA",
+    "files": [
+      "bs_BA.dic",
+      "bs_BA.aff"
+    ],
+    "path": "/dictionaries/bs_BA/"
+  },
+  {
+    "locale": "cs_CZ",
+    "files": [
+      "cs_CZ.dic",
+      "hyph_cs_CZ.dic",
+      "cs_CZ.aff"
+    ],
+    "path": "/dictionaries/cs_CZ/"
+  },
+  {
+    "locale": "da_DK",
+    "files": [
+      "da_DK.dic",
+      "hyph_da_DK.dic",
+      "da_DK.aff"
+    ],
+    "path": "/dictionaries/da_DK/"
+  },
+  {
+    "locale": "de",
+    "files": [
+      "de_AT_frami.dic",
+      "de_CH_frami.dic",
+      "de_DE_frami.dic",
+      "hyph_de_AT.dic",
+      "hyph_de_CH.dic",
+      "hyph_de_DE.dic",
+      "de_AT_frami.aff",
+      "de_CH_frami.aff",
+      "de_DE_frami.aff"
+    ],
+    "path": "/dictionaries/de/"
+  },
+  {
+    "locale": "el_GR",
+    "files": [
+      "el_GR.dic",
+      "hyph_el_GR.dic",
+      "el_GR.aff"
+    ],
+    "path": "/dictionaries/el_GR/"
+  },
+  {
+    "locale": "en",
+    "files": [
+      "en_AU.dic",
+      "en_CA.dic",
+      "en_GB.dic",
+      "en_US.dic",
+      "en_ZA.dic",
+      "hyph_en_GB.dic",
+      "hyph_en_US.dic",
+      "en_AU.aff",
+      "en_CA.aff",
+      "en_GB.aff",
+      "en_US.aff",
+      "en_ZA.aff"
+    ],
+    "path": "/dictionaries/en/"
+  },
+  {
+    "locale": "eo",
+    "files": [
+      "eo.dic",
+      "hyph_eo.dic",
+      "eo.aff"
+    ],
+    "path": "/dictionaries/eo/"
+  },
+  {
+    "locale": "es",
+    "files": [
+      "es_AR.dic",
+      "es_BO.dic",
+      "es_CL.dic",
+      "es_CO.dic",
+      "es_CR.dic",
+      "es_CU.dic",
+      "es_DO.dic",
+      "es_EC.dic",
+      "es_ES.dic",
+      "es_GQ.dic",
+      "es_GT.dic",
+      "es_HN.dic",
+      "es_MX.dic",
+      "es_NI.dic",
+      "es_PA.dic",
+      "es_PE.dic",
+      "es_PH.dic",
+      "es_PR.dic",
+      "es_PY.dic",
+      "es_SV.dic",
+      "es_US.dic",
+      "es_UY.dic",
+      "es_VE.dic",
+      "hyph_es.dic",
+      "es_AR.aff",
+      "es_BO.aff",
+      "es_CL.aff",
+      "es_CO.aff",
+      "es_CR.aff",
+      "es_CU.aff",
+      "es_DO.aff",
+      "es_EC.aff",
+      "es_ES.aff",
+      "es_GQ.aff",
+      "es_GT.aff",
+      "es_HN.aff",
+      "es_MX.aff",
+      "es_NI.aff",
+      "es_PA.aff",
+      "es_PE.aff",
+      "es_PH.aff",
+      "es_PR.aff",
+      "es_PY.aff",
+      "es_SV.aff",
+      "es_US.aff",
+      "es_UY.aff",
+      "es_VE.aff"
+    ],
+    "path": "/dictionaries/es/"
+  },
+  {
+    "locale": "et_EE",
+    "files": [
+      "et_EE.dic",
+      "hyph_et_EE.dic",
+      "et_EE.aff"
+    ],
+    "path": "/dictionaries/et_EE/"
+  },
+  {
+    "locale": "fa_IR",
+    "files": [
+      "fa-IR.dic",
+      "fa-IR.aff"
+    ],
+    "path": "/dictionaries/fa_IR/"
+  },
+  {
+    "locale": "fr_FR",
+    "files": [
+      "fr.dic",
+      "hyph_fr.dic",
+      "fr.aff"
+    ],
+    "path": "/dictionaries/fr_FR/"
+  },
+  {
+    "locale": "gd_GB",
+    "files": [
+      "gd_GB.dic",
+      "gd_GB.aff"
+    ],
+    "path": "/dictionaries/gd_GB/"
+  },
+  {
+    "locale": "gl",
+    "files": [
+      "gl_ES.dic",
+      "hyph_gl.dic",
+      "gl_ES.aff"
+    ],
+    "path": "/dictionaries/gl/"
+  },
+  {
+    "locale": "gug",
+    "files": [
+      "gug.dic",
+      "gug.aff"
+    ],
+    "path": "/dictionaries/gug/"
+  },
+  {
+    "locale": "gu_IN",
+    "files": [
+      "gu_IN.dic",
+      "gu_IN.aff"
+    ],
+    "path": "/dictionaries/gu_IN/"
+  },
+  {
+    "locale": "he_IL",
+    "files": [
+      "he_IL.dic",
+      "he_IL.aff"
+    ],
+    "path": "/dictionaries/he_IL/"
+  },
+  {
+    "locale": "hi_IN",
+    "files": [
+      "hi_IN.dic",
+      "hi_IN.aff"
+    ],
+    "path": "/dictionaries/hi_IN/"
+  },
+  {
+    "locale": "hr_HR",
+    "files": [
+      "hr_HR.dic",
+      "hyph_hr_HR.dic",
+      "hr_HR.aff"
+    ],
+    "path": "/dictionaries/hr_HR/"
+  },
+  {
+    "locale": "hu_HU",
+    "files": [
+      "hu_HU.dic",
+      "hyph_hu_HU.dic",
+      "hu_HU.aff"
+    ],
+    "path": "/dictionaries/hu_HU/"
+  },
+  {
+    "locale": "id",
+    "files": [
+      "hyph_id_ID.dic",
+      "id_ID.dic",
+      "id_ID.aff"
+    ],
+    "path": "/dictionaries/id/"
+  },
+  {
+    "locale": "is",
+    "files": [
+      "hyph_is.dic",
+      "is.dic",
+      "is.aff"
+    ],
+    "path": "/dictionaries/is/"
+  },
+  {
+    "locale": "it_IT",
+    "files": [
+      "hyph_it_IT.dic",
+      "it_IT.dic",
+      "it_IT.aff"
+    ],
+    "path": "/dictionaries/it_IT/"
+  },
+  {
+    "locale": "kmr_Latn",
+    "files": [
+      "kmr_Latn.dic",
+      "kmr_Latn.aff"
+    ],
+    "path": "/dictionaries/kmr_Latn/"
+  },
+  {
+    "locale": "kn_IN",
+    "files": [
+      "hyph_kn_IN.dic",
+      "kn_IN.dic",
+      "kn_IN.aff"
+    ],
+    "path": "/dictionaries/kn_IN/"
+  },
+  {
+    "locale": "ko_KR",
+    "files": [
+      "ko_KR.dic",
+      "ko_KR.aff"
+    ],
+    "path": "/dictionaries/ko_KR/"
+  },
+  {
+    "locale": "lo_LA",
+    "files": [
+      "lo_LA.dic",
+      "lo_LA.aff"
+    ],
+    "path": "/dictionaries/lo_LA/"
+  },
+  {
+    "locale": "lt_LT",
+    "files": [
+      "hyph_lt.dic",
+      "lt.dic",
+      "lt.aff"
+    ],
+    "path": "/dictionaries/lt_LT/"
+  },
+  {
+    "locale": "lv_LV",
+    "files": [
+      "hyph_lv_LV.dic",
+      "lv_LV.dic",
+      "lv_LV.aff"
+    ],
+    "path": "/dictionaries/lv_LV/"
+  },
+  {
+    "locale": "mn_MN",
+    "files": [
+      "hyph_mn_MN.dic",
+      "mn_MN.dic",
+      "mn_MN.aff"
+    ],
+    "path": "/dictionaries/mn_MN/"
+  },
+  {
+    "locale": "mr_IN",
+    "files": [
+      "hyph_mr_IN.dic",
+      "mr_IN.dic",
+      "mr_IN.aff"
+    ],
+    "path": "/dictionaries/mr_IN/"
+  },
+  {
+    "locale": "ne_NP",
+    "files": [
+      "ne_NP.dic",
+      "ne_NP.aff"
+    ],
+    "path": "/dictionaries/ne_NP/"
+  },
+  {
+    "locale": "nl_NL",
+    "files": [
+      "hyph_nl_NL.dic",
+      "nl_NL.dic",
+      "nl_NL.aff"
+    ],
+    "path": "/dictionaries/nl_NL/"
+  },
+  {
+    "locale": "no",
+    "files": [
+      "hyph_nb_NO.dic",
+      "hyph_nn_NO.dic",
+      "nb_NO.dic",
+      "nn_NO.dic",
+      "nb_NO.aff",
+      "nn_NO.aff"
+    ],
+    "path": "/dictionaries/no/"
+  },
+  {
+    "locale": "oc_FR",
+    "files": [
+      "oc_FR.dic",
+      "oc_FR.aff"
+    ],
+    "path": "/dictionaries/oc_FR/"
+  },
+  {
+    "locale": "or_IN",
+    "files": [
+      "hyph_or_IN.dic",
+      "or_IN.dic",
+      "or_IN.aff"
+    ],
+    "path": "/dictionaries/or_IN/"
+  },
+  {
+    "locale": "pa_IN",
+    "files": [
+      "hyph_pa_IN.dic",
+      "pa_IN.dic",
+      "pa_IN.aff"
+    ],
+    "path": "/dictionaries/pa_IN/"
+  },
+  {
+    "locale": "pl_PL",
+    "files": [
+      "hyph_pl_PL.dic",
+      "pl_PL.dic",
+      "pl_PL.aff"
+    ],
+    "path": "/dictionaries/pl_PL/"
+  },
+  {
+    "locale": "pt_BR",
+    "files": [
+      "hyph_pt_BR.dic",
+      "pt_BR.dic",
+      "pt_BR.aff"
+    ],
+    "path": "/dictionaries/pt_BR/"
+  },
+  {
+    "locale": "pt_PT",
+    "files": [
+      "hyph_pt_PT.dic",
+      "pt_PT.dic",
+      "pt_PT.aff"
+    ],
+    "path": "/dictionaries/pt_PT/"
+  },
+  {
+    "locale": "ro",
+    "files": [
+      "hyph_ro_RO.dic",
+      "ro_RO.dic",
+      "ro_RO.aff"
+    ],
+    "path": "/dictionaries/ro/"
+  },
+  {
+    "locale": "ru_RU",
+    "files": [
+      "hyph_ru_RU.dic",
+      "ru_RU.dic",
+      "ru_RU.aff"
+    ],
+    "path": "/dictionaries/ru_RU/"
+  },
+  {
+    "locale": "sa_IN",
+    "files": [
+      "hyph_sa_IN.dic",
+      "sa_IN.dic",
+      "sa_IN.aff"
+    ],
+    "path": "/dictionaries/sa_IN/"
+  },
+  {
+    "locale": "si_LK",
+    "files": [
+      "si_LK.dic",
+      "si_LK.aff"
+    ],
+    "path": "/dictionaries/si_LK/"
+  },
+  {
+    "locale": "sk_SK",
+    "files": [
+      "hyph_sk_SK.dic",
+      "sk_SK.dic",
+      "sk_SK.aff"
+    ],
+    "path": "/dictionaries/sk_SK/"
+  },
+  {
+    "locale": "sl_SI",
+    "files": [
+      "hyph_sl_SI.dic",
+      "sl_SI.dic",
+      "sl_SI.aff"
+    ],
+    "path": "/dictionaries/sl_SI/"
+  },
+  {
+    "locale": "sq_AL",
+    "files": [
+      "hyph_sq_AL.dic",
+      "sq_AL.dic",
+      "sq_AL.aff"
+    ],
+    "path": "/dictionaries/sq_AL/"
+  },
+  {
+    "locale": "sr",
+    "files": [
+      "hyph_sr-Latn.dic",
+      "hyph_sr.dic",
+      "sr-Latn.dic",
+      "sr.dic",
+      "sr-Latn.aff",
+      "sr.aff"
+    ],
+    "path": "/dictionaries/sr/"
+  },
+  {
+    "locale": "sv_SE",
+    "files": [
+      "hyph_sv.dic",
+      "sv_FI.dic",
+      "sv_SE.dic",
+      "sv_FI.aff",
+      "sv_SE.aff"
+    ],
+    "path": "/dictionaries/sv_SE/"
+  },
+  {
+    "locale": "sw_TZ",
+    "files": [
+      "sw_TZ.dic",
+      "sw_TZ.aff"
+    ],
+    "path": "/dictionaries/sw_TZ/"
+  },
+  {
+    "locale": "ta_IN",
+    "files": [
+      "ta_IN.dic",
+      "ta_IN.aff"
+    ],
+    "path": "/dictionaries/ta_IN/"
+  },
+  {
+    "locale": "te_IN",
+    "files": [
+      "hyph_te_IN.dic",
+      "te_IN.dic",
+      "te_IN.aff"
+    ],
+    "path": "/dictionaries/te_IN/"
+  },
+  {
+    "locale": "th_TH",
+    "files": [
+      "hyph_th_TH.dic",
+      "th_TH.dic",
+      "th_TH.aff"
+    ],
+    "path": "/dictionaries/th_TH/"
+  },
+  {
+    "locale": "tr_TR",
+    "files": [
+      "tr_TR.dic",
+      "tr_TR.aff"
+    ],
+    "path": "/dictionaries/tr_TR/"
+  },
+  {
+    "locale": "uk_UA",
+    "files": [
+      "hyph_uk_UA.dic",
+      "uk_UA.dic",
+      "uk_UA.aff"
+    ],
+    "path": "/dictionaries/uk_UA/"
+  },
+  {
+    "locale": "vi",
+    "files": [
+      "vi_VN.dic",
+      "vi_VN.aff"
+    ],
+    "path": "/dictionaries/vi/"
+  },
+  {
+    "locale": "zu_ZA",
+    "files": [
+      "hyph_zu_ZA.dic"
+    ],
+    "path": "/dictionaries/zu_ZA/"
+  }
+]

@@ -1,5 +1,6 @@
 import type { TranslationFile, TranslationUnit, FileType, GlossaryTerm } from '@/types/translation';
 import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
 
 import { SUPPORTED_FILE_EXTENSIONS, FILE_TYPE_LABELS } from '@/types/translation';
 
@@ -13,6 +14,7 @@ export class FileParserError extends Error {
 }
 
 export function detectFileType(fileName: string): FileType | null {
+  if (!fileName || !fileName.includes('.')) return null;
   const extension = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
   return SUPPORTED_FILE_EXTENSIONS[extension] || null;
 }
@@ -88,24 +90,138 @@ function parseXLIFF(content: string, fileName: string): TranslationFile {
 
   const units: TranslationUnit[] = [];
   const transUnits = doc.getElementsByTagName('trans-unit');
+  const seenUnitIds = new Set<string>();
 
   for (let i = 0; i < transUnits.length; i++) {
     const unit = transUnits[i];
-    const id = unit.getAttribute('id') || generateId();
-    const sourceEl = unit.getElementsByTagName('source')[0];
-    const targetEl = unit.getElementsByTagName('target')[0];
-    const noteEl = unit.getElementsByTagName('note')[0];
+    const unitId = unit.getAttribute('id') || `unit-${i}`;
+    
+    // Safety: some SDLXLIFF files repeat trans-unit nodes across different structural elements
+    if (seenUnitIds.has(unitId)) continue;
+    seenUnitIds.add(unitId);
+    
+    // Find source and target as DIRECT children to avoid duplicates from alt-trans or metadata
+    let sourceEl: Element | null = null;
+    let targetEl: Element | null = null;
+    let noteEl: Element | null = null;
 
-    const source = sourceEl?.textContent || '';
-    const target = targetEl?.textContent || '';
+    for (let j = 0; j < unit.childNodes.length; j++) {
+      const node = unit.childNodes[j];
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as Element;
+        const localName = el.localName || el.nodeName.split(':').pop()?.toLowerCase();
+        if (localName === 'source') sourceEl = el;
+        else if (localName === 'target') targetEl = el;
+        else if (localName === 'note') noteEl = el;
+      }
+    }
+
+    const getCleanContent = (node: Element | null): string => {
+      if (!node) return '';
+      
+      const processNode = (n: Node): string => {
+        if (n.nodeType === Node.ELEMENT_NODE) {
+          const el = n as Element;
+          const localName = el.localName || el.nodeName.split(':').pop()?.toLowerCase();
+          
+          if (localName === 'mrk') {
+            let res = '';
+            for (let k = 0; k < n.childNodes.length; k++) {
+              res += processNode(n.childNodes[k]);
+            }
+            return res;
+          }
+          
+          // Identify tag ID (priority: id > rid > name)
+          const tagId = el.getAttribute('id') || el.getAttribute('rid') || el.getAttribute('name') || el.getAttribute('pos') || '?';
+          
+          if (localName === 'bpt' || localName === 'bx') {
+            return `{${tagId}}`;
+          } else if (localName === 'ept' || localName === 'ex') {
+            return `{/${tagId}}`;
+          } else if (localName === 'ph' || localName === 'x' || localName === 'it' || localName === 'st') {
+            return `{${tagId}}`;
+          } else if (localName === 'g') {
+            let res = `{${tagId}}`;
+            for (let k = 0; k < n.childNodes.length; k++) {
+              res += processNode(n.childNodes[k]);
+            }
+            res += `{/${tagId}}`;
+            return res;
+          }
+          
+          // Fallback for other elements
+          if (n.childNodes.length > 0) {
+            let res = `{${tagId}}`;
+            for (let k = 0; k < n.childNodes.length; k++) {
+              res += processNode(n.childNodes[k]);
+            }
+            res += `{/${tagId}}`;
+            return res;
+          } else {
+            return `{${tagId}}`;
+          }
+        } else if (n.nodeType === Node.TEXT_NODE) {
+          return n.textContent || '';
+        }
+        return '';
+      };
+
+      // Heuristic: If the node contains segmentation markers, prioritize them
+      const mrks = Array.from(node.getElementsByTagName('mrk'))
+        .filter(m => m.getAttribute('mtype') === 'seg' || m.hasAttribute('mid'));
+
+      if (mrks.length > 0) {
+        const seenMids = new Set<string>();
+        let result = '';
+        
+        for (const mrk of mrks) {
+          const mid = mrk.getAttribute('mid');
+          if (mid && seenMids.has(mid)) continue;
+          if (mid) seenMids.add(mid);
+          
+          for (let k = 0; k < mrk.childNodes.length; k++) {
+            result += processNode(mrk.childNodes[k]);
+          }
+        }
+        
+        if (result.trim()) return result;
+      }
+      
+      // Fallback: full inner content
+      let fallbackResult = '';
+      for (let j = 0; j < node.childNodes.length; j++) {
+        fallbackResult += processNode(node.childNodes[j]);
+      }
+      
+      return fallbackResult || node.textContent || '';
+    };
+
+    const source = getCleanContent(sourceEl);
+    const target = getCleanContent(targetEl);
     const notes = noteEl?.textContent || undefined;
+
+    const state = targetEl?.getAttribute('state') || '';
+    const conf = targetEl?.getAttribute('conf') || unit.getAttribute('conf') || '';
+    const isLocked = unit.getAttribute('locked') === 'yes' || unit.getAttribute('locked') === 'true' || unit.getAttribute('mq:locked') === 'yes';
+    
+    // MemoQ specific status and match rate
+    const mqStatus = unit.getAttribute('mq:status') || targetEl?.getAttribute('mq:status') || '';
+    const mqPercent = unit.getAttribute('mq:percent') || targetEl?.getAttribute('mq:percent') || '';
+    
+    const matchRate = mqPercent || unit.getAttribute('match-quality') || unit.getAttribute('percent-match') || '';
+    const matchPercent = matchRate ? parseInt(matchRate, 10) : undefined;
 
     units.push({
       id: generateId(),
-      key: id,
+      key: unitId,
       source,
       target,
       notes,
+      status: state || conf || undefined,
+      conf: conf || undefined,
+      matchPercent,
+      isLocked: isLocked || state.toLowerCase().includes('locked'),
       filePath: fileName,
       index: units.length + 1,
     });
@@ -710,14 +826,116 @@ function parseTTX(content: string, fileName: string): TranslationFile {
   };
 }
 
+// EXCEL Parser (Generic translation)
+function parseEXCEL(data: Uint8Array, fileName: string): TranslationFile {
+  try {
+    const workbook = XLSX.read(data, { type: 'array' });
+    const firstSheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[firstSheetName];
+    const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+
+    const units: TranslationUnit[] = [];
+    let startIndex = 0;
+    
+    // Auto-detect columns
+    let sourceCol = 0;
+    let targetCol = 1;
+    let keyCol = -1;
+
+    if (json.length > 0) {
+      const firstRow = json[0].map(c => String(c || '').toLowerCase().trim());
+      
+      // Look for explicit headers
+      const sIdx = firstRow.findIndex(h => h.includes('source') || h === 'src' || h === 'english');
+      const tIdx = firstRow.findIndex(h => h.includes('target') || h === 'tgt' || h === 'translation');
+      const kIdx = firstRow.findIndex(h => h.includes('key') || h === 'id' || h === 'identifier');
+
+      if (sIdx !== -1) {
+        sourceCol = sIdx;
+        startIndex = 1; // Header found
+      }
+      if (tIdx !== -1) {
+        targetCol = tIdx;
+        startIndex = 1;
+      }
+      if (kIdx !== -1) {
+        keyCol = kIdx;
+        startIndex = 1;
+      }
+    }
+
+    for (let i = startIndex; i < json.length; i++) {
+      const row = json[i];
+      if (row && row.length > Math.max(sourceCol, targetCol)) {
+        const source = String(row[sourceCol] || '').trim();
+        const target = String(row[targetCol] || '').trim();
+        
+        if (source || target) {
+          units.push({
+            id: generateId(),
+            key: keyCol !== -1 ? String(row[keyCol] || `row_${i + 1}`) : `row_${i + 1}`,
+            source: source,
+            target: target,
+            filePath: fileName,
+            index: units.length + 1,
+          });
+        }
+      }
+    }
+
+    return {
+      id: generateId(),
+      name: fileName,
+      type: 'xlsx',
+      sourceLanguage: 'en',
+      targetLanguage: '',
+      units,
+      uploadedAt: new Date(),
+      size: data.length,
+    };
+  } catch (error) {
+    throw new FileParserError(`Excel parsing failed: ${error}`, fileName);
+  }
+}
+
+// MQXLZ Parser (Zipped MemoQ XLIFF)
+async function parseMQXLZ(data: Uint8Array, fileName: string): Promise<TranslationFile> {
+  try {
+    const zip = await JSZip.loadAsync(data);
+    const mqxliffFile = Object.keys(zip.files).find(f => f.endsWith('.mqxliff'));
+    
+    if (!mqxliffFile) {
+      // Try finding any XLIFF if mqxliff not found
+      const anyXliff = Object.keys(zip.files).find(f => f.toLowerCase().endsWith('.xlf') || f.toLowerCase().endsWith('.xliff'));
+      if (!anyXliff) {
+        throw new Error('No translation content found in MQXLZ package');
+      }
+      const content = await zip.files[anyXliff].async('string');
+      const result = parseXLIFF(content, fileName);
+      result.type = 'mqxlz';
+      return result;
+    }
+    
+    const content = await zip.files[mqxliffFile].async('string');
+    const result = parseXLIFF(content, fileName);
+    result.type = 'mqxlz';
+    return result;
+  } catch (error) {
+    throw new FileParserError(`MQXLZ parsing failed: ${error}`, fileName);
+  }
+}
+
 // Main parse function
 export async function parseFile(file: File): Promise<TranslationFile> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
-    reader.onload = (e) => {
+    const isBinary = file.name.endsWith('.xlsx') || 
+                     file.name.endsWith('.xls') || 
+                     file.name.endsWith('.mqxlz');
+
+    reader.onload = async (e) => {
       try {
-        const content = e.target?.result as string;
         const fileType = detectFileType(file.name);
 
         if (!fileType) {
@@ -726,6 +944,19 @@ export async function parseFile(file: File): Promise<TranslationFile> {
         }
 
         let result: TranslationFile;
+
+        if (isBinary) {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          if (file.name.endsWith('.mqxlz')) {
+            result = await parseMQXLZ(data, file.name);
+          } else {
+            result = parseEXCEL(data, file.name);
+          }
+          resolve(result);
+          return;
+        }
+
+        const content = e.target?.result as string;
 
         switch (fileType) {
           case 'json':
@@ -780,6 +1011,9 @@ export async function parseFile(file: File): Promise<TranslationFile> {
             result = parseXLIFF(content, file.name);
             result.type = 'mqxliff';
             break;
+          case 'mqxlz':
+            // Handled in isBinary block
+            break;
           case 'tipp':
             // TIPP is often a package, but if it's the XML payload:
             result = parseXLIFF(content, file.name);
@@ -795,11 +1029,11 @@ export async function parseFile(file: File): Promise<TranslationFile> {
       }
     };
 
-    reader.onerror = () => {
-      reject(new FileParserError('Failed to read file', file.name));
-    };
-
-    reader.readAsText(file);
+    if (isBinary) {
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.readAsText(file);
+    }
   });
 }
 

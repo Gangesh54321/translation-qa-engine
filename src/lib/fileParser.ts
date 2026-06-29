@@ -132,8 +132,14 @@ function parseXLIFF(content: string, fileName: string): TranslationFile {
             return res;
           }
           
-          // Identify tag ID (priority: id > rid > name)
-          const tagId = el.getAttribute('id') || el.getAttribute('rid') || el.getAttribute('name') || el.getAttribute('pos') || '?';
+          // For bpt/ept: MemoQ uses `rid` as the PAIRING key when present.
+          // e.g. <bpt id="2" rid="1"> pairs with <ept id="3" rid="1"> via rid="1".
+          // Using `id` here would give {2} and {/3} — a false tag-pair mismatch.
+          // For all other inline elements (ph, x, g), `id` is the stable identifier.
+          const isPairedTag = localName === 'bpt' || localName === 'ept' || localName === 'bx' || localName === 'ex';
+          const tagId = isPairedTag
+            ? (el.getAttribute('rid') || el.getAttribute('id') || el.getAttribute('name') || el.getAttribute('pos') || '?')
+            : (el.getAttribute('id') || el.getAttribute('rid') || el.getAttribute('name') || el.getAttribute('pos') || '?');
           
           if (localName === 'bpt' || localName === 'bx') {
             return `{${tagId}}`;
@@ -167,28 +173,7 @@ function parseXLIFF(content: string, fileName: string): TranslationFile {
         return '';
       };
 
-      // Heuristic: If the node contains segmentation markers, prioritize them
-      const mrks = Array.from(node.getElementsByTagName('mrk'))
-        .filter(m => m.getAttribute('mtype') === 'seg' || m.hasAttribute('mid'));
-
-      if (mrks.length > 0) {
-        const seenMids = new Set<string>();
-        let result = '';
-        
-        for (const mrk of mrks) {
-          const mid = mrk.getAttribute('mid');
-          if (mid && seenMids.has(mid)) continue;
-          if (mid) seenMids.add(mid);
-          
-          for (let k = 0; k < mrk.childNodes.length; k++) {
-            result += processNode(mrk.childNodes[k]);
-          }
-        }
-        
-        if (result.trim()) return result;
-      }
-      
-      // Fallback: full inner content
+      // Process full inner content including any wrapping formatting tags (e.g. <g id="2"> wrapping <mrk>)
       let fallbackResult = '';
       for (let j = 0; j < node.childNodes.length; j++) {
         fallbackResult += processNode(node.childNodes[j]);
@@ -205,12 +190,53 @@ function parseXLIFF(content: string, fileName: string): TranslationFile {
     const conf = targetEl?.getAttribute('conf') || unit.getAttribute('conf') || '';
     const isLocked = unit.getAttribute('locked') === 'yes' || unit.getAttribute('locked') === 'true' || unit.getAttribute('mq:locked') === 'yes';
     
-    // MemoQ specific status and match rate
+    // MemoQ specific: mq:status is the authoritative status field in MemoQ files
     const mqStatus = unit.getAttribute('mq:status') || targetEl?.getAttribute('mq:status') || '';
-    const mqPercent = unit.getAttribute('mq:percent') || targetEl?.getAttribute('mq:percent') || '';
     
-    const matchRate = mqPercent || unit.getAttribute('match-quality') || unit.getAttribute('percent-match') || '';
-    const matchPercent = matchRate ? parseInt(matchRate, 10) : undefined;
+    // MemoQ match rate — resolution order (confirmed from real MQXLIFF files):
+    // 1. mq:percent on trans-unit directly (e.g. mq:percent="82") — PRIMARY for MemoQ
+    // 2. mq:insertedmatch[@matchrate] child element — secondary MemoQ source
+    // 3. alt-trans[@match-quality] child element — standard XLIFF 1.2 way
+    // 4. match-quality / percent-match on trans-unit — other CAT tool variants
+    let matchPercent: number | undefined;
+    
+    const mqPercentAttr = unit.getAttribute('mq:percent') || '';
+    if (mqPercentAttr) {
+      matchPercent = parseInt(mqPercentAttr, 10);
+    }
+    
+    if (matchPercent === undefined) {
+      // Scan child elements for mq:insertedmatch or alt-trans
+      for (let j = 0; j < unit.childNodes.length; j++) {
+        const child = unit.childNodes[j];
+        if (child.nodeType === Node.ELEMENT_NODE) {
+          const el = child as Element;
+          const localName = el.localName || el.nodeName.split(':').pop()?.toLowerCase();
+          if (localName === 'insertedmatch') {
+            // <mq:insertedmatch matchrate="82"> — MemoQ TM match element
+            const mr = el.getAttribute('matchrate') || '';
+            if (mr) { matchPercent = parseInt(mr, 10); break; }
+          } else if (localName === 'alt-trans') {
+            // Standard XLIFF 1.2 match element
+            const mr = el.getAttribute('match-quality') || el.getAttribute('mq:match-quality') || '';
+            if (mr) { matchPercent = parseInt(mr, 10); break; }
+          }
+        }
+      }
+    }
+    
+    // Final fallback: non-namespaced attributes on trans-unit (other CAT tools)
+    if (matchPercent === undefined) {
+      const fallbackRate = unit.getAttribute('match-quality') || unit.getAttribute('percent-match') || '';
+      if (fallbackRate) matchPercent = parseInt(fallbackRate, 10);
+    }
+
+    // MemoQ per-segment character limit (mq:maxlengthchars) — used by Length Check QA rules
+    const maxLengthChars = unit.getAttribute('mq:maxlengthchars') || '';
+
+    const metadata: Record<string, any> = {};
+    if (maxLengthChars) metadata.maxLengthChars = parseInt(maxLengthChars, 10);
+    if (mqStatus) metadata.mqStatus = mqStatus;
 
     units.push({
       id: generateId(),
@@ -218,12 +244,14 @@ function parseXLIFF(content: string, fileName: string): TranslationFile {
       source,
       target,
       notes,
-      status: state || conf || undefined,
+      // mq:status is more authoritative than XLIFF state/conf for MemoQ files
+      status: state || mqStatus || conf || undefined,
       conf: conf || undefined,
       matchPercent,
       isLocked: isLocked || state.toLowerCase().includes('locked'),
       filePath: fileName,
       index: units.length + 1,
+      ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
     });
   }
 

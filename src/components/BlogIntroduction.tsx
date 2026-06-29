@@ -28,13 +28,13 @@ interface BlogIntroductionProps {
 
 const DEFAULT_FEATURES: { title: string; description: string; icon: React.ReactNode; image?: string }[] = [
   {
-    title: "114+ Professional Rules",
+    title: "Comprehensive QA Rules",
     description: "From simple punctuation to complex terminology consistency. Our rule set covers every possible linguistic pitfall.",
     icon: <CheckCircle2 className="w-6 h-6" aria-hidden="true" />
   },
   {
     title: "Industrial-Scale Parsing",
-    description: "Support for over 15 industrial file formats. Upload your project and get results in seconds, not minutes.",
+    description: "Support for multiple industrial file formats. Upload your project and get results in seconds, not minutes.",
     icon: <Layers className="w-6 h-6" aria-hidden="true" />
   },
   {
@@ -210,7 +210,7 @@ export const BlogIntroduction: React.FC<BlogIntroductionProps> = ({
           
           <div className="text-center max-w-4xl mx-auto space-y-6 relative z-10">
             <Badge variant="outline" className="px-4 py-1 rounded-full text-xs font-black uppercase tracking-widest bg-white/5 text-white border-white/20">Audit Engine Core</Badge>
-            <h2 className="text-3xl md:text-4xl font-black tracking-tighter uppercase leading-none">14 Precision <br /><span className="text-primary">Categories</span></h2>
+            <h2 className="text-3xl md:text-4xl font-black tracking-tighter uppercase leading-none">Comprehensive Audit <br /><span className="text-primary">Categories</span></h2>
             <p className="text-slate-400 text-xl leading-relaxed font-medium max-w-2xl mx-auto">Advanced rulesets designed for complex localization workflows. Total control over your audit preferences.</p>
           </div>
           
@@ -227,7 +227,7 @@ export const BlogIntroduction: React.FC<BlogIntroductionProps> = ({
                   </span>
                   <h4 className="font-black text-xl m-0 uppercase tracking-tight">{cat.name}</h4>
                 </div>
-                <p className="text-sm text-slate-400 leading-relaxed font-medium">{cat.description}</p>
+                <p className="text-base text-slate-400 leading-relaxed font-bold">{cat.description}</p>
               </motion.div>
             ))}
           </div>

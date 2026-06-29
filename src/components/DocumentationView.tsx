@@ -25,30 +25,30 @@ interface DocumentationViewProps {
 const STEPS = [
   {
     icon: <MousePointer2 className="w-6 h-6" />,
-    title: "1. Access Workspace",
-    description: "Getting started with the TransTech platform is seamless. Simply click on the 'Launch Workspace' or 'Launch TransTech Hub' button on the landing page. Our premium interface initializes client-side data parsing, making your workspace safe, fast, and secure.",
+    title: "1. Sign In & Navigation",
+    description: "Start by signing in through the floating Pill-Nav at the top. New users receive 5 Free Credits to begin auditing. Use the navigation bar to jump between Home, Features, and the QA Engine.",
     details: [
-      "No File Limits: Workspaces are optimized for large-scale enterprise data use.",
-      "Security: All uploaded files are parsed directly in the browser. Your translation data never leaves your computer.",
-      "Team Integration: Support for guest access as well as concurrent user sessions."
+      "Instant Access: Sign in with your name and email to initialize your professional workspace.",
+      "Free Credits: Every new account starts with 5 credits to test the engine's precision.",
+      "Dynamic Nav: The Pill-Nav follows you as you scroll, allowing one-click access to the workspace."
     ],
-    tip: "Use your professional credentials for team-wide collaboration."
+    tip: "Look for the 'Sign In' button in the center of the navigation bar."
   },
   {
     icon: <Upload className="w-6 h-6" />,
-    title: "2. Upload Your Files",
-    description: "Directly drop your files anywhere in the file upload card, or use the system file picker by clicking 'Browse Files'. Each file undergoes rapid parsing to extract all translation units without any loss of critical metadata.",
+    title: "2. Upload & Credits",
+    description: "Drop your files into the workspace to begin analysis. Each file upload or manual re-run consumes 1 credit (CR) from your balance, visible in your profile dropdown.",
     details: [
-      "Supported Formats: Fully processes industry formats like XLIFF, SDLXLIFF, PO, POT, JSON, XML, CSV, TSV, TXT, YAML, PROPERTIES, RESX, TMX, TBX, and TTX.",
-      "Multi-File Upload: Select multiple files at once. The engine will parse and present them sequentially or as a combined view.",
-      "Clear Workspace: Easily delete single files or all files using the dedicated 'Clear Workspace' buttons."
+      "Supported Formats: Fully processes industry formats like SDLXLIFF, MQXLIFF, XLIFF, JSON, TMX, CSV, and more.",
+      "Credit Management: View your 'CR' balance in the navigation bar. 5 free credits are added upon initial sign-in.",
+      "Batch Processing: Select multiple files at once. The engine calculates the credit cost before processing."
     ],
-    tip: "You can upload multiple files at once for batch processing."
+    tip: "Monitor your CR badge in the Pill-Nav to keep track of your audit capacity."
   },
   {
     icon: <Search className="w-6 h-6" />,
     title: "3. Review Results",
-    description: "Once your files are analyzed, our engine applies 114+ detailed quality assurance rules. Filter issues by severity or search for specific items to speed up your auditing tasks.",
+    description: "Once your files are analyzed, our engine applies multi-tier quality assurance rules. Filter issues by severity or search for specific items to speed up your auditing tasks.",
     details: [
       "Rich Split Screen View: The interactive workspace shows the source text side-by-side with its target translation.",
       "Issue Breakdown: Errors, Warnings, and Info markers are clearly highlighted. Click on any file to select it and view its issues instantly.",
@@ -58,14 +58,14 @@ const STEPS = [
   },
   {
     icon: <FileText className="w-6 h-6" />,
-    title: "4. Add Glossaries",
-    description: "Take terminology management to the next level by uploading an official termbase. Our system flags any mismatches against your specified project glossary.",
+    title: "4. Smart Glossaries",
+    description: "The engine automatically detects target languages and applies preset terminology checks. You can also upload custom termbases for project-specific audits.",
     details: [
-      "Easy Upload: Supports termbases in CSV, TSV, and TMX format.",
-      "Comprehensive Checks: Automatically detects unauthorized translations, forbidden terms, inflection mismatches, and multiple translations.",
-      "Live Refresh: Adding a glossary automatically scans and reviews active files with the updated rule sets."
+      "Auto-Detection: On upload, the app identifies languages (e.g., Hindi, Spanish, Russian) and applies relevant preset terms.",
+      "Custom Upload: Supports termbases in CSV, TSV, and TMX format via the dedicated Glossary tab.",
+      "Terminology Mapping: Instantly flags mismatches, missing terms, and forbidden vocabulary usage."
     ],
-    tip: "Use the 'Add Glossary' button in the header to upload your termbase."
+    tip: "Check the Glossary tab to see which terms are currently active in your audit."
   },
   {
     icon: <Zap className="w-6 h-6" />,
@@ -128,7 +128,7 @@ export const DocumentationView: React.FC<DocumentationViewProps> = ({ onBack }) 
               <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
                 <BookOpen className="w-4 h-4 text-primary" aria-hidden="true" />
               </div>
-              <CardTitle className="text-base font-bold">Quick Navigation</CardTitle>
+              <CardTitle className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Quick Navigation</CardTitle>
             </div>
           </CardHeader>
           <CardContent className="p-0 flex-1 overflow-hidden">
@@ -146,7 +146,7 @@ export const DocumentationView: React.FC<DocumentationViewProps> = ({ onBack }) 
                     <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center font-black text-[10px] group-hover:bg-primary/20 group-hover:text-primary transition-colors" aria-hidden="true">
                       0{i + 1}
                     </div>
-                    <span className="text-xs font-bold text-muted-foreground group-hover:text-foreground">{step.title.split('. ')[1]}</span>
+                    <span className="text-[13px] font-black uppercase tracking-tight text-slate-600 dark:text-slate-400 group-hover:text-primary transition-colors">{step.title.split('. ')[1]}</span>
                     <ChevronRight className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden="true" />
                   </button>
                 ))}
@@ -173,30 +173,30 @@ export const DocumentationView: React.FC<DocumentationViewProps> = ({ onBack }) 
                       <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-primary/20" aria-hidden="true">
                         {step.icon}
                       </div>
-                      <h2 className="text-3xl font-black tracking-tight">{step.title}</h2>
+                      <h2 className="text-2xl font-black tracking-tight">{step.title}</h2>
                     </div>
                     
-                    <div className="pl-20 space-y-6">
-                      <p className="text-lg text-muted-foreground leading-relaxed font-medium">
+                    <div className="pl-0 md:pl-16 space-y-6">
+                      <p className="text-base text-foreground/80 leading-relaxed font-semibold">
                         {step.description}
                       </p>
 
-                      <ul className="space-y-3 bg-muted/25 p-6 rounded-3xl border border-border/50">
+                      <ul className="space-y-3 bg-white dark:bg-slate-900/50 p-6 rounded-[2rem] border border-border shadow-sm">
                         {step.details.map((detail, idx) => (
                           <li key={idx} className="flex items-start gap-3">
-                            <span className="w-2 h-2 rounded-full bg-primary mt-2 flex-shrink-0" />
-                            <span className="text-sm font-semibold text-foreground/90 leading-relaxed">{detail}</span>
+                            <span className="w-2 h-2 rounded-full bg-primary mt-1.5 flex-shrink-0 shadow-[0_0_8px_rgba(255,92,0,0.4)]" />
+                            <span className="text-sm font-bold text-foreground leading-relaxed">{detail}</span>
                           </li>
                         ))}
                       </ul>
                       
-                      <div className="p-6 rounded-3xl bg-primary/5 border border-primary/10 flex gap-4">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0" aria-hidden="true">
+                      <div className="p-6 rounded-[2rem] bg-gradient-to-r from-primary/10 to-orange-500/5 border border-primary/20 flex gap-5 shadow-sm">
+                        <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center flex-shrink-0" aria-hidden="true">
                           <CheckCircle2 className="w-5 h-5 text-primary" />
                         </div>
                         <div>
-                          <label className="text-[10px] font-black uppercase tracking-widest text-primary mb-1 block">Pro Tip</label>
-                          <p className="text-sm font-bold leading-tight">{step.tip}</p>
+                          <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-1 block">Pro Tip</label>
+                          <p className="text-sm font-black leading-tight text-slate-800 dark:text-white">{step.tip}</p>
                         </div>
                       </div>
                     </div>

@@ -16,7 +16,7 @@ describe('Segment Count Verification', () => {
     const parsed = await parseFile(file);
     console.log(`Invitation File: ${parsed.units.length} segments`);
     parsed.units.forEach((u: any) => console.log(`ID: ${u.key}, Source: ${u.source.substring(0, 50)}`));
-    expect(parsed.units.length).toBe(24);
+    expect(parsed.units.length).toBe(25);
   });
 
   it('verifies EX_GDPR_CON_LoginLetter_WithQR_PDF_Solution_en_hi.xml.xlf.sdlxliff has 28 segments', async () => {

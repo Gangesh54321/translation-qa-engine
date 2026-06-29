@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import Autoplay from 'embla-carousel-autoplay';
 import { 
   Carousel, 
   CarouselContent, 
@@ -24,40 +25,58 @@ interface SlideData {
 
 const slides: SlideData[] = [
   {
-    title: "Terminology",
-    source: "Please login to your account.",
-    target: "कृपया अपने विवरण में लॉगिन करें।",
-    error: "विवरण",
-    correction: "खाते",
+    title: "Terminology Support",
+    source: "Access the profile dashboard.",
+    target: "प्रोफ़ाइल पैनल तक पहुँचें।",
+    error: "पैनल",
+    correction: "डैशबोर्ड",
     type: "TERMINOLOGY",
-    footer: "[INFO] Hub finds TERMINOLOGY mismatch"
+    footer: "[INFO] Glossary mismatch detected"
   },
   {
     title: "Spellcheck",
-    source: "Payment successful.",
-    target: "भुगतन सफल रहा।",
-    error: "भुगतन",
-    correction: "भुगतान",
+    source: "Verification completed.",
+    target: "सत्यापन पुरा हुआ।",
+    error: "पुरा",
+    correction: "पूरा",
     type: "SPELLCHECK",
-    footer: "[INFO] Hub finds SPELLING error"
+    footer: "[INFO] Spelling error identified"
   },
   {
-    title: "Inconsistency",
-    source: "Submit the form.",
-    target: "फ़ॉर्म जमा करें। / फ़ॉर्म भेजें।",
-    error: "भेजें",
-    correction: "जमा करें",
-    type: "INCONSISTENCY",
-    footer: "[INFO] Hub finds INCONSISTENT translation"
+    title: "Grammar Check",
+    source: "The systems are online.",
+    target: "सिस्टम ऑनलाइन है।",
+    error: "है",
+    correction: "हैं",
+    type: "GRAMMAR",
+    footer: "[INFO] Subject-Verb agreement error"
   },
   {
-    title: "Common Error",
-    source: "Hello !",
-    target: "नमस्ते !",
-    error: " !",
-    correction: "नमस्ते!",
-    type: "PUNCTUATION",
-    footer: "[INFO] Hub finds SPACING error"
+    title: "Multiple Files",
+    source: "Batch Audit (Project_A)",
+    target: "Analyzing 45 Files...",
+    error: "Analyzing",
+    correction: "Verified",
+    type: "MULTI-FILE",
+    footer: "[INFO] Cross-file consistency check"
+  },
+  {
+    title: "Multiple Export Formats",
+    source: "Download Results",
+    target: "Select: Excel / HTML / RTF",
+    error: "Select:",
+    correction: "Ready:",
+    type: "EXPORT",
+    footer: "[INFO] Professional reports generated"
+  },
+  {
+    title: "Advanced Tag Validation",
+    source: "[1}Signature:{2]",
+    target: "[1}توقيع:{3]",
+    error: "{3]",
+    correction: "{2]",
+    type: "TAGS",
+    footer: "[INFO] MemoQ mixed-bracket tag mismatch"
   }
 ];
 
@@ -86,7 +105,15 @@ export function FeatureSlider() {
         ))}
       </div>
 
-      <Carousel setApi={setApi} className="w-full">
+      <Carousel 
+        setApi={setApi} 
+        plugins={[
+          Autoplay({
+            delay: 4000,
+          }),
+        ]}
+        className="w-full"
+      >
         <CarouselContent>
           {slides.map((slide, index) => (
             <CarouselItem key={index}>

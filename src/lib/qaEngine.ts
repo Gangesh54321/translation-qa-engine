@@ -54,8 +54,9 @@ function checkNumbers(unit: TranslationUnit, config: QAConfig): QAIssue[] {
   const issues: QAIssue[] = [];
   const rules = config.rules;
 
-  // Strip tags to avoid false positives from tag attributes (e.g. id="0")
-  const stripTags = (text: string) => text.replace(/<[^>]+>/g, ' ');
+  // Strip tags and placeholders to avoid false positives from tag attributes or IDs
+  const TAG_PATTERN_INTERNAL = /\{\/?[0-9]+>|<[0-9]+\}|[\[\{]\/?\d+[\]\}]|<[^>]+>|\{\{[^}]+\}\}/g;
+  const stripTags = (text: string) => text.replace(TAG_PATTERN_INTERNAL, ' ');
   const sText = stripTags(unit.source);
   const tText = stripTags(unit.target);
 
@@ -99,8 +100,9 @@ function checkAlphanumericMismatch(unit: TranslationUnit, config: QAConfig): QAI
   const issues: QAIssue[] = [];
   if (!config.rules.num_alphanumeric_mismatch) return issues;
 
-  // Strip tags to avoid false positives from tag attributes
-  const stripTags = (text: string) => text.replace(/<[^>]+>/g, ' ');
+  // Strip tags and placeholders
+  const TAG_PATTERN_INTERNAL = /\{\/?[0-9]+>|<[0-9]+\}|[\[\{]\/?\d+[\]\}]|<[^>]+>|\{\{[^}]+\}\}/g;
+  const stripTags = (text: string) => text.replace(TAG_PATTERN_INTERNAL, ' ');
   const sText = stripTags(unit.source);
   const tText = stripTags(unit.target || '');
 
@@ -128,7 +130,7 @@ function checkTags(unit: TranslationUnit, config: QAConfig): QAIssue[] {
   const issues: QAIssue[] = [];
   const rules = config.rules;
   
-  const tagPattern = /\{[0-9]+>|<[0-9]+\}|\{[0-9]+\}|<[^>]+>|\{\{[^}]+\}\}/g;
+  const tagPattern = /\{[0-9]+>|<[0-9]+\}|[\[\{]\d+[\]\}]|<[^>]+>|\{\{[^}]+\}\}/g;
   
   const sourceTags = (unit.source || '').match(tagPattern) || [];
   const targetTags = (unit.target || '').match(tagPattern) || [];
@@ -614,9 +616,8 @@ function findSpellingSuggestion(word: string, dictSet: Set<string> & { byLength?
 }
 
 function dictionarySupportsScript(word: string, dictSet: Set<string>): boolean {
-  if (/^[a-zA-Z0-9]+$/.test(word)) return true;
-
   const scripts = [
+    { name: 'Latin', regex: /[a-zA-Z]/ },
     { name: 'Kannada', regex: /[\u0C80-\u0CFF]/ },
     { name: 'Devanagari', regex: /[\u0900-\u097F]/ },
     { name: 'Bengali', regex: /[\u0980-\u09FF]/ },
@@ -644,6 +645,10 @@ function dictionarySupportsScript(word: string, dictSet: Set<string>): boolean {
 }
 
 function checkSpelling(unit: TranslationUnit, config: QAConfig, dictionary?: any): QAIssue[] {
+  return [];
+}
+
+function checkSpellingDisabled(unit: TranslationUnit, config: QAConfig, dictionary?: any): QAIssue[] {
   const issues: QAIssue[] = [];
   console.log(`[Worker-Spellcheck] Unit ${unit.id} lang_spelling rule:`, config.rules.lang_spelling, "Dict length:", Array.isArray(dictionary) ? dictionary.length : dictionary instanceof Set ? dictionary.size : 'not array/set');
   if (!config.rules.lang_spelling || !dictionary) return issues;
@@ -713,13 +718,23 @@ function checkSpelling(unit: TranslationUnit, config: QAConfig, dictionary?: any
 
     if (!dictSet.has(lowerWord) && !dictSet.has(word)) {
       const suggestion = findSpellingSuggestion(lowerWord, dictSet);
-      issues.push({
-        id: generateIssueId(), unitId: unit.id, type: 'lang_spelling', severity: 'warning',
-        message: `Possible spelling error: "${word}"`,
-        source: unit.source, target: unit.target, key: unit.key,
-        suggestion: suggestion ? unit.target.replace(word, suggestion) : undefined,
-        autoFix: suggestion ? unit.target.replace(word, suggestion) : undefined
-      });
+      if (suggestion) {
+        let errMsg = 'Typo';
+        const lowerSuggestion = suggestion.toLowerCase();
+        if (lowerSuggestion.startsWith(lowerWord) && lowerSuggestion.length > lowerWord.length) {
+          errMsg = 'The word incomplete';
+        } else if (getLevenshteinDistance(lowerWord, lowerSuggestion) > 1) {
+          errMsg = 'significantly deviates from the source';
+        }
+
+        issues.push({
+          id: generateIssueId(), unitId: unit.id, type: 'lang_spelling', severity: 'warning',
+          message: errMsg,
+          source: unit.source, target: unit.target, key: unit.key,
+          suggestion: unit.target.replace(word, suggestion),
+          autoFix: unit.target.replace(word, suggestion)
+        });
+      }
     }
   }
 

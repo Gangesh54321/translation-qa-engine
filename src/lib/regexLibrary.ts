@@ -20,6 +20,7 @@ export const QA_PATTERNS = {
         printf: /%[0-9.]*[a-z]/gi,
         brackets: /\[[^\]]+\]/g,
         rails: /%\{[^}]+\}/g,
+        memoq_tags: /[\[\{]\d+[\]\}]/g,
     },
 
     // Alphanumeric tokens (any word containing at least one digit)

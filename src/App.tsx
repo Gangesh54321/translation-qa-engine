@@ -40,7 +40,7 @@ import {
   ArrowLeft,
   ChevronDown,
   HelpCircle,
-  FolderPlus,
+  FolderUp,
   Hash,
   Maximize2,
   Lock,
@@ -95,6 +95,15 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { parseFile, FileParserError, parseGlossaryFile, detectFileType } from '@/lib/fileParser';
 
 
@@ -112,6 +121,8 @@ import { ISSUE_TYPE_LABELS, ISSUE_SEVERITY_COLORS, SUPPORTED_FILE_EXTENSIONS, IS
 import { runQA, DEFAULT_CONFIG } from '@/lib/qaEngine';
 
 import { exportToExcel, exportToHTML, exportToRTF } from '@/lib/exportService';
+import { auth, updateUserCredits, logPaymentTransaction, getUserCredits } from '@/lib/firebase';
+import { signOut } from 'firebase/auth';
 import './App.css';
 
 // Global variables for dictionary caching
@@ -121,22 +132,30 @@ let cachedDictionaryLocale: string | undefined = undefined;
 // generateHTMLReport removed in favor of exportToHTML from exportService
 
 const SUB_CATEGORY_RULES: Record<string, IssueType[]> = {
-  'omissions': ['term_missing', 'seg_untranslated', 'seg_empty', 'len_empty_target'],
   'untranslatables': ['lang_partial_untranslated', 'seg_source_copied'],
-  'forbidden': ['style_forbidden_words', 'term_forbidden_used'],
+  'terminology': ['term_missing', 'term_approved_not_used', 'term_translation_mismatch'],
+  'consistency': ['consist_identical_source', 'consist_identical_target'],
+  'spelling': ['lang_spelling', 'lang_grammar', 'lang_repeated_word'],
   'case': ['cap_mismatch', 'cap_incorrect_upper', 'cap_incorrect_lower', 'cap_sentence_start', 'cap_all_caps_mismatch'],
   'punctuation': ['punct_missing', 'punct_extra', 'punct_mismatch', 'space_leading', 'space_trailing', 'space_double', 'space_before_punct', 'space_missing_after_punct'],
   'quotes': ['punct_incorrect_quotes', 'punct_quotes_mismatch', 'punct_unpaired_quotes', 'punct_unpaired_symbol'],
   'measurement': ['loc_measurement', 'num_measurement_mismatch'],
   'tags': ['tag_missing', 'tag_extra', 'tag_order_mismatch', 'tag_position_mismatch', 'tag_pair_mismatch', 'tag_formatting_mismatch'],
   'numbers': ['num_missing', 'num_extra', 'num_mismatch', 'num_decimal_mismatch', 'num_thousand_mismatch', 'num_currency_mismatch'],
-  'miscellaneous': ['lang_spelling', 'lang_grammar', 'lang_repeated_word']
+  'miscellaneous': ['loc_date', 'regex_email', 'regex_url']
 };
+
+interface AuthViewProps {
+  onClose: () => void;
+  onSuccess: (userData: { name: string; email: string; password?: string; isLogin?: boolean; rememberMe?: boolean }) => void;
+}
 
 interface User {
   name: string;
   email: string;
   credits: number;
+  password?: string;
+  rememberMe?: boolean;
 }
 
 interface IssueItemProps {
@@ -268,7 +287,17 @@ const HighlightText = ({ text }: { text: string }) => {
 
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    const savedUser = localStorage.getItem('transtech_user');
+    if (savedUser) {
+      try {
+        return JSON.parse(savedUser);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
   const [files, setFiles] = useState<TranslationFile[]>([]);
   const [results, setResults] = useState<QAResult[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -280,7 +309,7 @@ export default function App() {
   const [selectedCheckGroup, setSelectedCheckGroup] = useState<IssueCategory>('terminology');
   const [activeSettingsTab, setActiveSettingsTab] = useState<'checks' | 'options' | 'actions'>('checks');
   const [hasRunQA, setHasRunQA] = useState(false);
-  const [hasStartedQA, setHasStartedQA] = useState(false);
+  const [hasStartedQA, setHasStartedQA] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [glossary, setGlossary] = useState<GlossaryTerm[]>([]);
   const [glossaryFiles, setGlossaryFiles] = useState<string[]>([]);
@@ -292,10 +321,50 @@ export default function App() {
   const [showDashboard, setShowDashboard] = useState(false);
   const [activeSection, setActiveSection] = useState('home');
   const [workspaceTab, setWorkspaceTab] = useState<'files' | 'filters' | 'glossary' | 'settings' | 'length'>('files');
-  const [selectedSubCategory, setSelectedSubCategory] = useState<string>('omissions');
+  const [glossarySearch, setGlossarySearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string>('untranslatables');
   const [geoConfig, setGeoConfig] = useState({ currency: 'INR', symbol: '₹', isIndia: true });
   const [showLinguisticInsights, setShowLinguisticInsights] = useState(false);
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
+
+  // Clean up legacy test accounts on first launch to ensure a fresh start
+  useEffect(() => {
+    const hasLegacy = localStorage.getItem('transtech_user') || localStorage.getItem('transtech_all_users');
+    if (hasLegacy) {
+      localStorage.removeItem('transtech_user');
+      localStorage.removeItem('transtech_all_users');
+      setUser(null);
+      console.log("[Cleanup] All legacy test accounts cleared for fresh Google Authentication.");
+    }
+  }, []);
+
+  // Persistence Effect
+  useEffect(() => {
+    if (user) {
+      // Only save session to localStorage if rememberMe is true
+      if (user.rememberMe !== false) {
+        localStorage.setItem('transtech_user', JSON.stringify(user));
+      } else {
+        localStorage.removeItem('transtech_user');
+      }
+      
+      // Sync with global users "database" to persist credits across logins
+      const allUsers = JSON.parse(localStorage.getItem('transtech_all_users') || '{}');
+      allUsers[user.email] = user;
+      localStorage.setItem('transtech_all_users', JSON.stringify(allUsers));
+
+      // Sync credits to Firestore database if user is authenticated via Firebase
+      const firebaseUser = auth?.currentUser;
+      if (firebaseUser) {
+        updateUserCredits('qa-feature', firebaseUser.uid, user.credits).catch((err) => {
+          console.error("[Firebase] Failed to auto-sync credits to Firestore:", err);
+        });
+      }
+    } else {
+      localStorage.removeItem('transtech_user');
+    }
+  }, [user]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -350,23 +419,66 @@ export default function App() {
   const isAboutPath = () => currentPath === '/' || currentPath === '';
   const isAbout = !user || isAboutPath();
 
-  const handleLoginSuccess = (userData: { name: string; email: string }) => {
-    // Initialize user with 5 free credits
-    const newUser: User = {
-      ...userData,
-      credits: 5
-    };
+  const handleLoginSuccess = async (userData: { name: string; email: string; password?: string; isLogin?: boolean; rememberMe?: boolean }) => {
+    // Check if user already exists in local storage "database"
+    const allUsers = JSON.parse(localStorage.getItem('transtech_all_users') || '{}');
+    let existingUser = allUsers[userData.email];
 
-    setUser(newUser);
+    if (!existingUser) {
+      // Auto-create user for Google Sign-In with 10 free credits
+      existingUser = {
+        name: userData.name,
+        email: userData.email,
+        credits: 10, // Give 10 credits on first login
+        rememberMe: true
+      };
+    } else {
+      // Always update local name with the fresh Google name
+      existingUser.name = userData.name;
+    }
+
+    // Try to sync with Firestore if firebase authentication is active
+    const firebaseUser = auth?.currentUser;
+    if (firebaseUser) {
+      try {
+        const firestoreCredits = await getUserCredits('qa-feature', firebaseUser.uid);
+        if (firestoreCredits !== null) {
+          existingUser.credits = firestoreCredits;
+          console.log(`[Firebase] Loaded ${firestoreCredits} credits from Firestore for user ${userData.email}`);
+        } else {
+          // If the user doesn't have credits stored in Firestore yet, write the default credits (10 or current) to Firestore
+          await updateUserCredits('qa-feature', firebaseUser.uid, existingUser.credits);
+        }
+      } catch (err) {
+        console.error("[Firebase] Error syncing credits on login:", err);
+      }
+    }
+
+    allUsers[userData.email] = existingUser;
+    localStorage.setItem('transtech_all_users', JSON.stringify(allUsers));
+
+    // Login Successful
+    const loggedInUser = {
+      ...existingUser,
+      rememberMe: userData.rememberMe ?? true
+    };
+    setUser(loggedInUser);
     setShowAuth(false);
     setShowDocs(false);
     setShowDashboard(true);
-    toast.success(`Welcome back, ${userData.name}!`, {
-      description: "5 Free Credits added to your account."
+    toast.success(`Hi ${userData.name}, Welcome to TransTech Hub!`, {
+      description: `Session active with ${existingUser.credits} credits.`
     });
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      if (auth) {
+        await signOut(auth);
+      }
+    } catch (err) {
+      console.error('Firebase sign-out error:', err);
+    }
     setUser(null);
     setFiles([]);
     setResults([]);
@@ -386,12 +498,12 @@ export default function App() {
       return;
     }
 
-    const rzpKey = import.meta.env.VITE_RAZORPAY_TEST_KEY;
+    const rzpKey = import.meta.env.VITE_RAZORPAY_LIVE_KEY;
     console.log("Key from env:", rzpKey);
     if (!rzpKey) {
       alert("Error: .env file is not loaded! Please completely stop your terminal/server (Ctrl+C) and run 'npm run dev' again so it reads the .env file.");
       toast.error("Configuration Error", {
-        description: "Razorpay Test Key is missing. Did you restart the server after creating .env?"
+        description: "Razorpay Live Key is missing. Did you restart the server after creating .env?"
       });
       return;
     }
@@ -404,22 +516,52 @@ export default function App() {
       currency: geoConfig.currency,
       name: "TransTech Hub",
       description: `${creditsToAdd} Audit Credits`,
-      handler: function (response: any) {
+      handler: async function (response: any) {
+        const newCredits = user.credits + creditsToAdd;
+        
+        // 1. Update local React state
         setUser(prev => {
           if (!prev) return prev;
           return {
             ...prev,
-            credits: prev.credits + creditsToAdd
+            credits: newCredits
           };
         });
+
+        // 2. Persist to Firestore and Log Transaction if Firebase auth is active
+        const firebaseUser = auth?.currentUser;
+        if (firebaseUser) {
+          try {
+            // Update credits in Firestore
+            await updateUserCredits('qa-feature', firebaseUser.uid, newCredits);
+            
+            // Log payment details in Firestore transactions subcollection
+            await logPaymentTransaction('qa-feature', firebaseUser.uid, {
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id || '',
+              razorpay_signature: response.razorpay_signature || '',
+              amount: amount,
+              currency: geoConfig.currency,
+              creditsAdded: creditsToAdd,
+              status: 'verified_simulated'
+            });
+
+            console.log("[Firebase] Successfully persisted credits and logged transaction.");
+          } catch (dbErr) {
+            console.error("[Firebase] Error saving transaction/credits:", dbErr);
+          }
+        }
+
+        // 3. Highlight Security Verification in Dev Mode
+        console.log("%c[Security Info] In production, you must verify the signature on your server side:", "color: #FF5C00; font-weight: bold;");
+        console.log(`Signature details received:\nPayment ID: ${response.razorpay_payment_id}\nOrder ID: ${response.razorpay_order_id}\nSignature: ${response.razorpay_signature}`);
+
         toast.success("Payment Successful!", {
           description: `${creditsToAdd} Credits have been added to your account.`
         });
       },
       prefill: {
-        name: user.name,
-        email: user.email,
-        contact: "9999999999"
+        name: user.name
       },
       theme: {
         color: "#FF5C00"
@@ -432,6 +574,18 @@ export default function App() {
         toast.error("Payment Failed", {
           description: response.error.description
         });
+        
+        // Log failed payment if Firebase is active
+        const firebaseUser = auth?.currentUser;
+        if (firebaseUser) {
+          logPaymentTransaction('qa-feature', firebaseUser.uid, {
+            razorpay_payment_id: response.error.metadata?.payment_id || `fail_${Date.now()}`,
+            amount: amount,
+            currency: geoConfig.currency,
+            creditsAdded: 0,
+            status: 'failed'
+          }).catch(console.error);
+        }
       });
       rzp1.open();
     } catch (e: any) {
@@ -486,6 +640,9 @@ export default function App() {
           toast.success(`Parsed ${file.name}`, {
             description: `${parsedFile.units.length} translation units found`,
           });
+          
+          // Yield to event loop to keep UI responsive
+          await new Promise(resolve => setTimeout(resolve, 0));
         } catch (error) {
           console.error(`Error parsing ${file.name}:`, error);
           toast.error(`Failed to parse ${file.name}`, {
@@ -541,9 +698,53 @@ export default function App() {
                 else if (cyrillicCount / totalUnits > 0.1) f.targetLanguage = 'ru';
                 else if (devanagariCount / totalUnits > 0.1) f.targetLanguage = 'hi';
                 else if (greekCount / totalUnits > 0.1) f.targetLanguage = 'el';
-                else f.targetLanguage = 'es';
+                else {
+                  // Detect Latin sub-languages (English, Spanish, French, German, Italian, Portuguese)
+                  let enScore = 0;
+                  let esScore = 0;
+                  let frScore = 0;
+                  let deScore = 0;
+                  let itScore = 0;
+                  let ptScore = 0;
+                  
+                  const enWords = new Set(['the', 'and', 'that', 'with', 'this', 'have', 'from', 'your', 'are']);
+                  const esWords = new Set(['el', 'los', 'las', 'del', 'que', 'con', 'para', 'como', 'este', 'una']);
+                  const frWords = new Set(['les', 'des', 'est', 'avec', 'pour', 'dans', 'cette', 'pour', 'dans']);
+                  const deWords = new Set(['der', 'die', 'das', 'und', 'ist', 'mit', 'auf', 'für', 'eine', 'den']);
+                  const itWords = new Set(['gli', 'che', 'con', 'per', 'nella', 'questo', 'sono', 'della']);
+                  const ptWords = new Set(['dos', 'das', 'uma', 'com', 'para', 'este', 'mais', 'para', 'pela']);
+
+                  for (const unit of f.units) {
+                    if (!unit.target) continue;
+                    const words = (unit.target.toLowerCase().match(/[a-z]+/g) || []);
+                    for (const w of words) {
+                      if (enWords.has(w)) enScore++;
+                      if (esWords.has(w)) esScore++;
+                      if (frWords.has(w)) frScore++;
+                      if (deWords.has(w)) deScore++;
+                      if (itWords.has(w)) itScore++;
+                      if (ptWords.has(w)) ptScore++;
+                    }
+                  }
+
+                  const scores = [
+                    { lang: 'en', score: enScore },
+                    { lang: 'es', score: esScore },
+                    { lang: 'fr', score: frScore },
+                    { lang: 'de', score: deScore },
+                    { lang: 'it', score: itScore },
+                    { lang: 'pt', score: ptScore }
+                  ];
+                  scores.sort((a, b) => b.score - a.score);
+                  
+                  if (scores[0].score > 0) {
+                    f.targetLanguage = scores[0].lang;
+                  } else {
+                    f.targetLanguage = 'en'; // Safe default
+                  }
+                }
               } else {
-                f.targetLanguage = 'es';
+                f.targetLanguage = 'en'; // Safe default
               }
             }
           }
@@ -760,9 +961,20 @@ export default function App() {
       }
     };
 
-    window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Auto-select first file or combined report when files load or change
+  useEffect(() => {
+    if (files.length > 0) {
+      const fileExists = files.some(f => f.id === selectedFile) || selectedFile === 'combined';
+      if (!fileExists) {
+        setSelectedFile(files.length > 1 ? 'combined' : files[0].id);
+      }
+    } else {
+      setSelectedFile(null);
+    }
+  }, [files, selectedFile]);
 
 
 
@@ -827,42 +1039,7 @@ export default function App() {
     }
   }, [files, config, results, glossaryFiles]);
 
-  // Handle test files load
-  const loadTestFiles = useCallback(async () => {
-    try {
-      const response = await fetch('/test-files/index.json');
-      const fileNames: string[] = await response.json();
-      
-      const newFiles: TranslationFile[] = [];
-      const loadingToast = toast.loading('Loading test files...');
-      
-      for (const fileName of fileNames) {
-        if (fileName === 'index.json') continue;
-        try {
-          const fileRes = await fetch(`/test-files/${fileName}`);
-          const blob = await fileRes.blob();
-          const file = new File([blob], fileName);
-          const parsedFile = await parseFile(file);
-          newFiles.push(parsedFile);
-        } catch (err) {
-          console.error(`Failed to load test file ${fileName}:`, err);
-        }
-      }
-      
-      if (newFiles.length > 0) {
-        setFiles(prev => [...prev, ...newFiles]);
-        setSelectedFile(newFiles[0].id);
-        toast.dismiss(loadingToast);
-        toast.success(`Loaded ${newFiles.length} test files from target folder`);
-      } else {
-        toast.dismiss(loadingToast);
-        toast.error('No valid test files found');
-      }
-    } catch (err) {
-      toast.error('Failed to load test files index');
-      console.error(err);
-    }
-  }, []);
+
 
 
 
@@ -1198,6 +1375,16 @@ export default function App() {
 
       const matchesSeverity = severityFilter.includes(issue.severity);
 
+      const cat = ISSUE_CATEGORY_MAP[issue.type] || 'Other';
+      let matchesCategory = true;
+      if (categoryFilter !== 'all') {
+        if (categoryFilter === 'punctuation') {
+          matchesCategory = cat === 'punctuation' || cat === 'whitespace';
+        } else {
+          matchesCategory = cat === categoryFilter;
+        }
+      }
+
       // Apply selective filtering if defined in config
       let isExcluded = false;
       if (config.selectiveFiltering) {
@@ -1224,9 +1411,9 @@ export default function App() {
         }
       }
 
-      return matchesSearch && matchesSeverity && !isExcluded;
+      return matchesSearch && matchesSeverity && matchesCategory && !isExcluded;
     });
-  }, [currentResult, searchQuery, severityFilter, files, config]);
+  }, [currentResult, searchQuery, severityFilter, categoryFilter, files, config]);
 
 
   // Handle smooth scroll to sections
@@ -1257,14 +1444,10 @@ export default function App() {
         {/* FYNSEC Style Floating Nav */}
         <nav className="pill-nav">
           <div className="flex items-center gap-3 pr-6 border-r border-border/50">
-            <div className="shrink-0">
-              <svg width="42" height="42" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect width="36" height="36" rx="10" fill="#FF5C00" />
-                <rect x="7" y="10" width="22" height="4" rx="2" fill="white" />
-                <rect x="14.5" y="14" width="7" height="12" rx="2" fill="white" />
-              </svg>
+            <div className="shrink-0 w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
+              <span className="text-white font-black text-xl select-none">T</span>
             </div>
-            <span className="font-black text-xl tracking-tighter uppercase">TransTech Hub</span>
+            <span className="font-black text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-teal-500">TransTech Hub</span>
           </div>
 
           <div className="flex-1 flex items-center justify-center gap-8">
@@ -1277,10 +1460,14 @@ export default function App() {
                       setShowDocs(true);
                       setShowDashboard(false);
                     } else if (tab === 'QA Engine') {
-                      navigateTo('/qa');
-                      setShowDashboard(false);
-                      setShowDocs(false);
-                      setHasStartedQA(true);
+                      if (user) {
+                        navigateTo('/qa');
+                        setShowDashboard(false);
+                        setShowDocs(false);
+                        setHasStartedQA(true);
+                      } else {
+                        setShowAuth(true);
+                      }
                     } else {
                       setShowDocs(false);
                       setShowDashboard(false);
@@ -1308,13 +1495,74 @@ export default function App() {
 
           <div className="ml-auto pl-6 border-l border-border/50">
             {user ? (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-4">
                 <div className="text-[10px] font-black text-primary uppercase tracking-widest bg-primary/10 px-3 py-1 rounded-full">
                   {user.credits} CR
                 </div>
-                <button onClick={handleLogout} className="text-muted-foreground hover:text-destructive transition-colors">
-                  <LogOut className="w-4 h-4" />
-                </button>
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      className="relative h-10 w-10 rounded-full border border-primary/10 bg-primary/5 hover:bg-primary/10 p-0 overflow-hidden transition-all hover:ring-2 hover:ring-primary/20"
+                    >
+                      <Avatar className="h-full w-full">
+                        <AvatarFallback className="bg-primary/5 text-primary font-black uppercase text-xs">
+                          {user.name.charAt(0)}
+                        </AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-64 mt-2" align="end" forceMount>
+                    <DropdownMenuLabel className="font-normal">
+                      <div className="flex flex-col space-y-1 p-1">
+                        <p className="text-sm font-black leading-none uppercase tracking-tight">{user.name}</p>
+                        <p className="text-xs text-muted-foreground leading-none mt-1">
+                          {user.email}
+                        </p>
+                      </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    
+                    <div className="px-3 py-3 bg-primary/5 rounded-md mx-1 mb-1">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                          <Zap className="w-3 h-3 text-primary" /> Credits
+                        </span>
+                        <span className="text-xs font-black text-primary">{user.credits}</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-primary/10 rounded-full overflow-hidden">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${Math.min(100, (user.credits / 10) * 100)}%` }}
+                          className="h-full bg-primary"
+                        />
+                      </div>
+                    </div>
+
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="cursor-pointer font-bold py-2.5 text-xs uppercase tracking-widest" onClick={() => setShowDashboard(true)}>
+                      <User className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                      <span>Dashboard</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="cursor-pointer font-bold py-2.5 text-xs uppercase tracking-widest" onClick={() => {
+                      navigateTo('/qa');
+                      setShowDashboard(false);
+                      setHasStartedQA(true);
+                    }}>
+                      <ShieldCheck className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                      <span>Workspace</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem 
+                      className="cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/5 font-bold py-2.5 text-xs uppercase tracking-widest"
+                      onClick={handleLogout}
+                    >
+                      <LogOut className="mr-2 h-3.5 w-3.5" />
+                      <span>Sign out</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             ) : (
               <button 
@@ -1340,9 +1588,9 @@ export default function App() {
                 className="max-w-6xl mx-auto space-y-8"
               >
                 <div className="flex items-end justify-between mb-12">
-                  <div className="space-y-4">
-                    <h2 className="text-5xl font-black tracking-tighter uppercase">User <span className="text-primary">Dashboard</span></h2>
-                    <p className="text-xl text-muted-foreground font-medium italic">Welcome back, {user.name}. Manage your account and linguistic resources.</p>
+                  <div className="space-y-2">
+                    <h2 className="text-3xl font-black tracking-tighter uppercase">User <span className="text-primary">Dashboard</span></h2>
+                    <p className="text-sm text-muted-foreground font-medium">Welcome back, {user.name}. Manage your account and linguistic resources.</p>
                   </div>
                   <Button variant="outline" className="rounded-full px-6 border-primary/20 text-primary font-black uppercase tracking-widest text-[10px]" 
                     onClick={() => {
@@ -1365,14 +1613,14 @@ export default function App() {
                         <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shadow-inner">
                           <BarChart3 className="w-6 h-6" />
                         </div>
-                        <CardTitle className="text-2xl font-black uppercase tracking-tight">Credit Balance</CardTitle>
+                        <CardTitle className="text-lg font-black uppercase tracking-tight">Credit Balance</CardTitle>
                       </div>
-                      <CardDescription className="text-lg font-medium">Your current analysis capacity for the audit engine.</CardDescription>
+                      <CardDescription className="text-sm font-medium">Your current analysis capacity for the audit engine.</CardDescription>
                     </CardHeader>
                     <CardContent className="p-10 pt-0">
-                      <div className="flex items-baseline gap-4 mb-8">
-                        <span className="text-8xl font-black tracking-tighter text-primary">{user.credits}</span>
-                        <span className="text-2xl font-black text-muted-foreground/60 uppercase tracking-widest">Credits Available</span>
+                      <div className="flex items-baseline gap-3 mb-8">
+                        <span className="text-5xl font-black tracking-tighter text-primary">{user.credits}</span>
+                        <span className="text-sm font-black text-muted-foreground/60 uppercase tracking-widest">Credits Available</span>
                       </div>
                       
                       <div className="space-y-4 max-w-md">
@@ -1395,9 +1643,9 @@ export default function App() {
                   {/* Upgrade Card */}
                   <Card className="border-none shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] bg-white relative overflow-hidden flex flex-col rounded-[2rem]">
                     <CardHeader className="p-10 pb-4">
-                      <Badge className="w-fit bg-primary hover:bg-primary/90 text-white font-black px-4 py-1 mb-8 rounded-full text-xs tracking-widest border-none">PREMIUM</Badge>
-                      <CardDescription className="text-slate-400 font-medium text-lg leading-relaxed">
-                        Unlock full power of the TransTech Hub<br/>engine.
+                      <Badge className="w-fit bg-primary hover:bg-primary/90 text-white font-black px-4 py-1 mb-4 rounded-full text-xs tracking-widest border-none">PREMIUM</Badge>
+                      <CardDescription className="text-slate-400 font-medium text-sm leading-relaxed">
+                        Unlock full power of the TransTech Hub engine.
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="p-10 pt-4 flex-1 flex flex-col">
@@ -1450,7 +1698,7 @@ export default function App() {
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="w-14 h-14 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-500">
-                        <ShieldCheck className="w-7 h-7" />
+                        <span className="font-black text-2xl select-none">T</span>
                       </div>
                       <div>
                         <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Account Security</h4>
@@ -1474,8 +1722,9 @@ export default function App() {
                 exit={{ opacity: 0, scale: 0.95 }}
                 className="max-w-[1750px] mx-auto px-12 lg:px-24"
               >
-                <div id="home" className="grid grid-cols-1 lg:grid-cols-2 gap-24 items-center py-12 lg:py-20">
-                  <div className="space-y-10 text-left">
+                <div id="home" className="py-12 lg:py-20 space-y-24">
+                  {/* Top Section: Text Only (Centered) */}
+                  <div className="max-w-4xl mx-auto text-center space-y-10">
                     <motion.div
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -1485,27 +1734,22 @@ export default function App() {
                       Linguistic Intelligence Platform
                     </motion.div>
                     
-                    <div className="space-y-4">
-                      <h2 className="text-5xl md:text-7xl font-black tracking-tighter leading-[0.85] text-slate-900 dark:text-white uppercase">
+                    <div className="space-y-3">
+                      <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-[0.9] text-slate-900 dark:text-white uppercase">
                         TransTech <br />
-                        <span className="text-primary text-4xl md:text-6xl">QA Engine</span>
-                      </h2>
-                      <p className="text-sm md:text-base font-black text-slate-500 uppercase tracking-[0.2em] whitespace-nowrap">
+                        <span className="text-primary text-3xl md:text-5xl">QA Engine</span>
+                      </h1>
+                      <p className="text-xs font-black text-slate-500 uppercase tracking-[0.2em]">
                         Smart Quality Checks for Translations.
                       </p>
                     </div>
                       
-                    <p className="text-xl md:text-2xl text-muted-foreground leading-relaxed max-w-xl font-medium">
-                      Industrial-grade translation QA supporting 100+ languages powered by AI spellcheck and centralized GitHub dictionaries with custom glossary support. Built for precision, designed for scale.
+                    <p className="text-base text-muted-foreground leading-relaxed font-medium">
+                      TransTech QA Engine is an <strong className="text-slate-900 dark:text-white">industrial-grade linguistic intelligence platform</strong> designed for high-precision translation auditing. Supporting over <strong className="text-slate-900 dark:text-white">100 languages</strong> with extensive <em className="text-primary italic">built-in dictionaries</em>, it integrates <strong className="text-slate-900 dark:text-white">AI-enhanced spell check</strong>, <em className="text-primary italic">custom glossaries</em>, and <strong className="text-slate-900 dark:text-white">multi-format support</strong> to ensure flawless localized content at scale.
                     </p>
-                    
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.4 }}
-                      className="pt-6"
-                    >
-                      <button 
+
+                    <div className="pt-4 flex justify-center">
+                      <Button 
                         onClick={() => {
                           if (user) {
                             navigateTo('/qa');
@@ -1515,27 +1759,73 @@ export default function App() {
                             setShowAuth(true);
                           }
                         }}
-                        className="px-14 py-6 bg-primary hover:bg-primary/90 text-white font-black text-xl rounded-full shadow-[0_20px_50px_-10px_rgba(255,92,0,0.4)] transition-all hover:scale-105 active:scale-95 flex items-center gap-5 group"
+                        className="px-10 py-5 bg-primary hover:bg-primary/90 text-white font-black text-base rounded-full shadow-[0_20px_50px_-10px_rgba(255,92,0,0.4)] transition-all hover:scale-105 active:scale-95 flex items-center gap-4 group"
                       >
-                        Start Linguistic QA
-                        <ArrowRight className="w-8 h-8 group-hover:translate-x-2 transition-transform" />
-                      </button>
-                    </motion.div>
+                        Launch QA Engine
+                        <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
+                      </Button>
+                    </div>
                   </div>
 
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9, x: 20 }}
-                    animate={{ opacity: 1, scale: 1, x: 0 }}
-                    className="relative w-full"
-                  >
-                    <FeatureSlider />
-                  </motion.div>
+                  {/* Bottom Section: Two Columns (Features & Slider) */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                    {/* Left: Core Capabilities */}
+                    <motion.div
+                      initial={{ opacity: 0, x: -40 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.2 }}
+                    >
+                      <Card className="glass border-primary/20 bg-primary/5 p-10 rounded-[3rem] shadow-2xl shadow-primary/10 overflow-hidden relative group">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-bl-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500" />
+                        <div className="space-y-8">
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-primary">Precision Insight</p>
+                            <h4 className="text-lg font-black uppercase tracking-tighter text-slate-900 dark:text-white">Core Capabilities</h4>
+                          </div>
+                          <div className="grid grid-cols-1 gap-4">
+                            {[
+                              { text: "Terminology Support", icon: <ShieldCheck className="w-4 h-4" /> },
+                              { text: "Spellcheck", icon: <CheckCircle2 className="w-4 h-4" /> },
+                              { text: "Grammar Check", icon: <Zap className="w-4 h-4" /> },
+                              { text: "Multiple Files", icon: <FileText className="w-4 h-4" /> },
+                              { text: "Multiple Export Formats", icon: <Download className="w-4 h-4" /> }
+                            ].map((item, i) => (
+                              <motion.div 
+                                key={i}
+                                initial={{ opacity: 0, x: 20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: 0.4 + (i * 0.1) }}
+                                className="flex items-center gap-4"
+                              >
+                                <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-white dark:bg-slate-900 flex items-center justify-center text-primary shadow-md border border-slate-100 dark:border-slate-800">
+                                  {item.icon}
+                                </div>
+                                <span className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">{item.text}</span>
+                              </motion.div>
+                            ))}
+                          </div>
+                        </div>
+                      </Card>
+                    </motion.div>
+
+                    {/* Right: Feature Slider */}
+                    <motion.div
+                      initial={{ opacity: 0, x: 40 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.3 }}
+                      className="relative z-10"
+                    >
+                      <div className="rounded-[3rem] overflow-hidden shadow-2xl border border-primary/10 bg-black/5 p-4 lg:p-8 glass">
+                        <FeatureSlider />
+                      </div>
+                    </motion.div>
+                  </div>
                 </div>
 
                 <div className="mt-20">
                   <BlogIntroduction 
                     features={[
-                      { title: "Universal Compatibility", description: "Seamlessly process SDLXLIFF, MQXLIFF, TMX, and custom Excel structures with zero data loss.", icon: <Languages className="w-5 h-5" aria-hidden="true" /> },
+                      { title: "Universal Compatibility", description: "Seamlessly process SDLXLIFF, MQXLIFF/MQXLZ (MemoQ), TMX, and custom Excel structures with zero data loss.", icon: <Languages className="w-5 h-5" aria-hidden="true" /> },
                       { title: "Industrial Rulesets", description: "Standardized QA logic covering terminology, consistency, and tag integrity across all projects.", icon: <ShieldCheck className="w-5 h-5" aria-hidden="true" />, image: "/assets/rulesets_realistic.png" },
                       { title: "Professional Export", description: "Generate board-ready audit reports in Excel, HTML, and Bilingual RTF formats with one click.", icon: <FileText className="w-5 h-5" aria-hidden="true" /> },
                       { title: "Linguistic Focus", description: "Engineered logic that minimizes noise and flags only the most critical linguistic risks.", icon: <BarChart3 className="w-5 h-5" aria-hidden="true" />, image: "/assets/linguistic.png" }
@@ -1559,6 +1849,23 @@ export default function App() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
+                {/* Go Back To Workspace Button at the absolute top */}
+                {hasRunQA && (
+                  <div className="flex justify-start mb-6">
+                    <Button
+                      onClick={() => {
+                        setHasRunQA(false);
+                      }}
+                      variant="ghost"
+                      size="sm"
+                      className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-xl px-4 h-10 transition-all border border-border/40 hover:border-primary/20 shadow-sm bg-background/50 hover:shadow"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      Go Back To Workspace
+                    </Button>
+                  </div>
+                )}
+
                 {/* Stats Overview */}
                 {hasRunQA && files.length > 0 && (
                   <motion.div
@@ -1626,27 +1933,29 @@ export default function App() {
                       className="max-w-4xl mx-auto text-center py-20 space-y-8"
                     >
                       <div className="inline-flex items-center gap-3 px-6 py-2 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 text-xs font-black uppercase tracking-widest">
-                        <ShieldCheck className="w-4 h-4" />
+                        <div className="w-5 h-5 rounded-md bg-indigo-600 flex items-center justify-center text-white mr-1 shadow-sm">
+                          <span className="font-black text-[10px] select-none">T</span>
+                        </div>
                         Linguistic QA Engine Prototype
                       </div>
-                      <h2 className="text-6xl font-black tracking-tighter uppercase">
+                      <h1 className="text-4xl font-black tracking-tighter uppercase">
                         Industrial <span className="text-primary">Precision</span>
-                      </h2>
-                      <p className="text-xl text-muted-foreground font-medium max-w-2xl mx-auto">
+                      </h1>
+                      <p className="text-sm text-muted-foreground font-medium max-w-2xl mx-auto">
                         Upload your translation files below to begin an automated linguistic audit. 
                         Our engine identifies terminology errors, consistency issues, and tag mismatches.
                       </p>
                       <div className="pt-8 flex items-center justify-center gap-4">
                         <Button 
                           onClick={() => setHasStartedQA(true)}
-                          className="h-16 px-10 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700 font-black text-lg shadow-xl shadow-indigo-500/20 transition-all hover:scale-105"
+                          className="h-11 px-8 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 font-black text-sm shadow-xl shadow-indigo-500/20 transition-all hover:scale-105"
                         >
                           Get Started
                         </Button>
                         <Button 
                           variant="outline"
                           onClick={loadSampleProject}
-                          className="h-16 px-10 rounded-2xl border-indigo-200 text-indigo-600 font-black text-lg hover:bg-indigo-50 transition-all"
+                          className="h-11 px-8 rounded-xl border-indigo-200 text-indigo-600 font-black text-sm hover:bg-indigo-50 transition-all"
                         >
                           View Sample Audit
                         </Button>
@@ -1660,8 +1969,19 @@ export default function App() {
                       exit={{ opacity: 0 }}
                       className="min-h-[500px] flex flex-col items-center justify-center space-y-6"
                     >
-                      <div className="relative w-24 h-24 flex items-center justify-center bg-primary/10 rounded-full border-2 border-primary/30 animate-pulse shadow-xl shadow-primary/10">
-                        <span className="text-6xl font-black text-primary select-none font-sans tracking-tight">T</span>
+                      <div className="relative w-32 h-32 flex items-center justify-center">
+                        {/* Circular ring animation */}
+                        <div className="absolute inset-0 border-4 border-primary/20 rounded-full"></div>
+                        <motion.div 
+                          className="absolute inset-0 border-4 border-t-primary border-r-transparent border-b-transparent border-l-transparent rounded-full"
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                        ></motion.div>
+                        
+                        {/* Central T Symbol */}
+                        <div className="relative w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center border border-primary/30 shadow-xl shadow-primary/5">
+                          <span className="text-5xl font-black text-primary select-none font-sans tracking-tight">T</span>
+                        </div>
                       </div>
                       <div className="flex flex-col items-center gap-1.5 text-center">
                         <h3 className="text-lg font-black tracking-tight text-foreground">Processing Analysis...</h3>
@@ -1676,6 +1996,7 @@ export default function App() {
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -20 }}
+                      className="w-full max-w-6xl mx-auto border border-slate-100 dark:border-slate-800 bg-white/75 dark:bg-slate-900/75 backdrop-blur-xl rounded-[2.5rem] p-8 shadow-2xl shadow-slate-100/40 dark:shadow-none flex flex-col md:flex-row gap-8 items-stretch min-h-[650px]"
                     >
                         {/* Tab Header */}
                         <div className="workspace-tabs-list">
@@ -1716,28 +2037,61 @@ export default function App() {
                           </button>
                         </div>
 
-                        <div className="pt-4">
+                        <div className="flex-1 w-full pt-0">
                         {workspaceTab === 'files' && (
                           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <div 
+                             <div 
                               className={`dropzone-container ${isDragging ? 'dragging' : ''}`}
                               onDragOver={handleDragOver}
                               onDragLeave={handleDragLeave}
                               onDrop={handleDrop}
                             >
-                              <svg width="240" height="120" viewBox="0 0 240 120" fill="none" className="mb-6 opacity-80">
-                                <rect x="90" y="55" width="60" height="40" rx="10" fill="#E2E8F0" />
-                                <path d="M120 75L120 65M120 65L115 70M120 65L125 70" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                <rect x="50" y="65" width="25" height="35" rx="4" fill="white" stroke="#CBD5E1" strokeWidth="1.5" />
-                                <rect x="165" y="65" width="35" height="35" rx="4" fill="white" stroke="#CBD5E1" strokeWidth="1.5" />
-                                <path d="M165 75H200" stroke="#CBD5E1" strokeWidth="1.5" />
-                                <circle cx="120" cy="85" r="15" fill="#F1F5F9" />
-                                <path d="M115 85H125M120 80V90" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" />
-                              </svg>
-                              <p className="text-muted-foreground text-sm flex items-center gap-2 font-medium">
-                                Drop your files or folder here
-                                <HelpCircle className="w-4 h-4 opacity-40" />
-                              </p>
+                              {files.length === 0 ? (
+                                <>
+                                  <svg width="240" height="120" viewBox="0 0 240 120" fill="none" className="mb-6 opacity-80">
+                                    <rect x="90" y="55" width="60" height="40" rx="10" fill="#E2E8F0" />
+                                    <path d="M120 75L120 65M120 65L115 70M120 65L125 70" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    <rect x="50" y="65" width="25" height="35" rx="4" fill="white" stroke="#CBD5E1" strokeWidth="1.5" />
+                                    <rect x="165" y="65" width="35" height="35" rx="4" fill="white" stroke="#CBD5E1" strokeWidth="1.5" />
+                                    <path d="M165 75H200" stroke="#CBD5E1" strokeWidth="1.5" />
+                                    <circle cx="120" cy="85" r="15" fill="#F1F5F9" />
+                                    <path d="M115 85H125M120 80V90" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" />
+                                  </svg>
+                                  <p className="text-muted-foreground text-sm flex items-center gap-2 font-medium">
+                                    Drop your files or folder here
+                                    <HelpCircle className="w-4 h-4 opacity-40" />
+                                  </p>
+                                </>
+                              ) : (
+                                <div className="w-full max-w-2xl space-y-4">
+                                  <div className="flex items-center justify-between border-b pb-2">
+                                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Loaded Files ({files.length})</p>
+                                    <p className="text-[10px] text-primary font-bold animate-pulse">Drop more files here to add</p>
+                                  </div>
+                                  <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar text-left">
+                                    {files.map(f => (
+                                      <div key={f.id} className="flex items-center justify-between bg-background/80 backdrop-blur p-3 rounded-xl border border-slate-100 shadow-sm hover:border-primary/20 transition-all">
+                                        <span className="text-xs font-bold truncate flex items-center gap-2 text-slate-700">
+                                          <FileText className="w-4 h-4 text-primary" />
+                                          {f.name}
+                                        </span>
+                                        <div className="flex items-center gap-3">
+                                          <span className="text-[10px] bg-primary/5 text-primary px-2.5 py-0.5 rounded-full font-mono font-bold">{f.units.length} units</span>
+                                          <button 
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setFiles(prev => prev.filter(file => file.id !== f.id));
+                                            }}
+                                            className="text-slate-400 hover:text-destructive transition-colors p-1 hover:bg-destructive/5 rounded-lg"
+                                          >
+                                            <X className="w-4 h-4" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                             
                             <div className="flex justify-center gap-4">
@@ -1749,45 +2103,31 @@ export default function App() {
                                 className="hidden"
                                 id="file-upload-main"
                               />
-                              <Button asChild className="h-14 px-12 rounded-2xl bg-white border border-slate-200 text-slate-800 font-black uppercase tracking-widest text-xs shadow-[0_10px_20px_-10px_rgba(0,0,0,0.1)] hover:shadow-[0_20px_30px_-10px_rgba(0,0,0,0.15)] hover:bg-slate-50 transition-all active:scale-95">
-                                <label htmlFor="file-upload-main" className="cursor-pointer flex items-center justify-center gap-3">
-                                  <Upload className="w-5 h-5 text-primary" />
-                                  Add files
-                                </label>
-                              </Button>
-                              <Button 
-                                onClick={loadTestFiles}
-                                className="h-14 px-12 rounded-2xl bg-indigo-600 text-white font-black uppercase tracking-widest text-xs shadow-[0_10px_20px_-10px_rgba(79,70,229,0.3)] hover:shadow-[0_20px_30px_-10px_rgba(79,70,229,0.4)] transition-all active:scale-95 flex items-center gap-3"
-                              >
-                                <FolderPlus className="w-5 h-5 text-indigo-300" />
-                                Load Test Set
-                              </Button>
+                              {/* Hidden folder input */}
+                              <input
+                                type="file"
+                                webkitdirectory=""
+                                directory=""
+                                multiple
+                                onChange={(e) => handleFileUpload(e.target.files)}
+                                className="hidden"
+                                id="folder-upload-main"
+                              />
+                              <div className="flex justify-center gap-4">
+                                <Button asChild className="h-14 px-12 rounded-2xl bg-white border border-slate-200 text-slate-800 font-black uppercase tracking-widest text-xs shadow-[0_10px_20px_-10px_rgba(0,0,0,0.1)] hover:shadow-[0_20px_30px_-10px_rgba(0,0,0,0.15)] hover:bg-slate-50 transition-all active:scale-95">
+                                  <label htmlFor="file-upload-main" className="cursor-pointer flex items-center justify-center gap-3">
+                                    <Upload className="w-5 h-5 text-primary" />
+                                    Add files
+                                  </label>
+                                </Button>
+                                <Button asChild className="h-14 px-12 rounded-2xl bg-white border border-slate-200 text-slate-800 font-black uppercase tracking-widest text-xs shadow-[0_10px_20px_-10px_rgba(0,0,0,0.1)] hover:shadow-[0_20px_30px_-10px_rgba(0,0,0,0.15)] hover:bg-slate-50 transition-all active:scale-95">
+                                  <label htmlFor="folder-upload-main" className="cursor-pointer flex items-center justify-center gap-3">
+                                    <FolderUp className="w-5 h-5 text-primary" />
+                                    Add folder
+                                  </label>
+                                </Button>
+                              </div>
                             </div>
-
-                            {files.length > 0 && (
-                                <div className="max-w-md mx-auto bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-                                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3 px-1">Loaded Files ({files.length})</p>
-                                  <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
-                                    {files.map(f => (
-                                      <div key={f.id} className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-100/50">
-                                        <span className="text-xs font-bold truncate flex items-center gap-2 text-slate-700">
-                                          <FileText className="w-3.5 h-3.5 text-primary" />
-                                          {f.name}
-                                        </span>
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-[10px] text-slate-400 font-mono">{f.units.length} units</span>
-                                          <button 
-                                            onClick={() => setFiles(prev => prev.filter(file => file.id !== f.id))}
-                                            className="text-slate-400 hover:text-destructive transition-colors"
-                                          >
-                                            <X className="w-3 h-3" />
-                                          </button>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                            )}
                             <div className="flex justify-center mt-8">
                               <Button 
                                 onClick={() => setWorkspaceTab('filters')}
@@ -1802,25 +2142,19 @@ export default function App() {
 
                         {workspaceTab === 'filters' && (
                           <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl mx-auto py-10">
-                            <div className="text-center space-y-4">
-                              <h2 className="text-3xl font-black uppercase tracking-tight text-slate-900">Selective Filtering</h2>
-                              <p className="text-slate-500 font-medium italic">Exclude specific segment types from the QA audit to focus on relevant content.</p>
+                            <div className="text-center space-y-2">
+                              <h2 className="text-xl font-black uppercase tracking-tight text-slate-900">Selective Filtering</h2>
+                              <p className="text-sm text-slate-500 font-medium">Exclude specific segment types from the QA audit to focus on relevant content.</p>
                             </div>
 
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="max-w-md mx-auto bg-white rounded-3xl p-8 border border-slate-100 shadow-sm space-y-4">
                               {[
-                                { id: 'excludeIce', label: 'Exclude ICE', description: 'Context Exact', icon: ShieldCheck },
-                                { id: 'excludeLocked', label: 'Exclude Locked', description: 'Read-only', icon: Lock },
-                                { id: 'excludeUnlocked', label: 'Exclude Unlocked', description: 'Editable', icon: Maximize2 },
-                                { id: 'exclude100', label: 'Exclude 100%', description: 'Perfect Match', icon: CheckCircle2 },
+                                { id: 'excludeIce', label: 'Exclude ICE', description: 'Context Exact' },
+                                { id: 'excludeLocked', label: 'Exclude Locked', description: 'Read-only' },
                               ].map((opt) => (
                                 <div 
                                   key={opt.id}
-                                  className={`p-6 rounded-[24px] border-2 transition-all cursor-pointer group ${
-                                    config.selectiveFiltering?.[opt.id as keyof typeof config.selectiveFiltering]
-                                      ? 'border-primary bg-primary/5 shadow-md shadow-primary/10'
-                                      : 'border-slate-100 bg-white hover:border-slate-200'
-                                  }`}
+                                  className="flex items-start gap-4 p-3 rounded-2xl hover:bg-slate-50 transition-all cursor-pointer group"
                                   onClick={() => setConfig(prev => ({
                                     ...prev,
                                     selectiveFiltering: {
@@ -1829,119 +2163,32 @@ export default function App() {
                                     }
                                   }))}
                                 >
-                                  <div className="flex flex-col items-center gap-2 text-center">
-                                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                                       config.selectiveFiltering?.[opt.id as keyof typeof config.selectiveFiltering]
-                                         ? 'bg-primary text-white'
-                                         : 'bg-slate-50 text-slate-400 group-hover:bg-slate-100'
-                                     }`}>
-                                       <opt.icon className="w-5 h-5" />
-                                     </div>
-                                     <div className="space-y-0.5">
-                                       <h4 className="font-black uppercase tracking-widest text-[10px]">{opt.label}</h4>
-                                       <p className="text-[9px] font-medium text-slate-400 italic leading-none">{opt.description}</p>
-                                     </div>
-                                     <Checkbox 
-                                       checked={!!config.selectiveFiltering?.[opt.id as keyof typeof config.selectiveFiltering]} 
-                                       className="mt-1 border-slate-200 scale-75"
-                                     />
+                                  <Checkbox 
+                                    id={`filter-opt-${opt.id}`}
+                                    checked={!!config.selectiveFiltering?.[opt.id as keyof typeof config.selectiveFiltering]} 
+                                    className="mt-1 w-5 h-5 rounded-md border-slate-300 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                                    onClick={(e) => e.stopPropagation()}
+                                    onCheckedChange={(checked) => {
+                                      setConfig(prev => ({
+                                        ...prev,
+                                        selectiveFiltering: {
+                                          ...(prev.selectiveFiltering || {}),
+                                          [opt.id]: checked === true
+                                        }
+                                      }));
+                                    }}
+                                  />
+                                  <div className="space-y-0.5 cursor-pointer">
+                                    <label htmlFor={`filter-opt-${opt.id}`} className="text-sm font-bold text-slate-700 group-hover:text-primary transition-colors cursor-pointer block leading-none pt-1">
+                                      {opt.label}
+                                    </label>
+                                    <p className="text-xs text-slate-400 font-medium">{opt.description}</p>
                                   </div>
                                 </div>
                               ))}
                             </div>
 
-                            <div className="flex justify-center gap-4 py-2">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => {
-                                  const newRules: Record<string, boolean> = {};
-                                  Object.keys(DEFAULT_CONFIG.rules).forEach(k => {
-                                    newRules[k] = k.startsWith('consist_');
-                                  });
-                                  setConfig(prev => ({ ...prev, rules: newRules as any }));
-                                  toast.success("Preset Applied: Inconsistencies Only", {
-                                    description: "All other QA rules have been disabled."
-                                  });
-                                }}
-                                className="rounded-full px-6 font-black uppercase tracking-tighter text-[10px] h-10 border-indigo-200 text-indigo-600 hover:bg-indigo-50"
-                              >
-                                <RefreshCw className="w-3 h-3 mr-2" /> Enable Inconsistency Only
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => {
-                                  setConfig(prev => ({ ...prev, rules: DEFAULT_CONFIG.rules }));
-                                  toast.info("Rules Restored", {
-                                    description: "All default QA rules have been re-enabled."
-                                  });
-                                }}
-                                className="rounded-full px-6 font-black uppercase tracking-tighter text-[10px] h-10 border-slate-200 text-slate-600 hover:bg-slate-50"
-                              >
-                                Restore All Rules
-                              </Button>
-                            </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white/50 p-10 rounded-[40px] border border-slate-100 shadow-sm">
-                              <div className="space-y-4">
-                                <div className="flex items-center gap-3 mb-2">
-                                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                                    <ShieldCheck className="w-5 h-5" />
-                                  </div>
-                                  <label className="text-sm font-black uppercase tracking-widest text-slate-700">Exclude Specific Status (Conf)</label>
-                                </div>
-                                <Input 
-                                  placeholder="e.g. Translated, Approved (comma separated)" 
-                                  value={config.selectiveFiltering?.excludeConf?.join(', ') || ''}
-                                  onChange={(e) => {
-                                    const values = e.target.value.split(',').map(v => v.trim()).filter(Boolean);
-                                    setConfig(prev => ({
-                                      ...prev,
-                                      selectiveFiltering: { ...prev.selectiveFiltering, excludeConf: values }
-                                    }));
-                                  }}
-                                  className="h-14 rounded-2xl bg-white border-slate-200 px-6 font-bold focus-visible:ring-primary/20"
-                                />
-                                <p className="text-[10px] text-slate-400 font-medium italic">Exclude segments matching these confirmation status tags from XLIFF files.</p>
-                              </div>
-
-                              <div className="space-y-4">
-                                <div className="flex items-center gap-3 mb-2">
-                                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                                    <Percent className="w-5 h-5" />
-                                  </div>
-                                  <label className="text-sm font-black uppercase tracking-widest text-slate-700">Exclude Match % Threshold</label>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                  <div className="relative flex-1">
-                                    <Input 
-                                      type="number"
-                                      placeholder="e.g. 95" 
-                                      value={config.selectiveFiltering?.excludePercent || ''}
-                                      onChange={(e) => setConfig(prev => ({
-                                        ...prev,
-                                        selectiveFiltering: { ...prev.selectiveFiltering, excludePercent: parseInt(e.target.value) || undefined }
-                                      }))}
-                                      className="h-14 rounded-2xl bg-white border-slate-200 px-6 font-bold focus-visible:ring-primary/20 pr-12"
-                                    />
-                                    <div className="absolute right-6 top-1/2 -translate-y-1/2 font-black text-slate-300">%</div>
-                                  </div>
-                                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">and above</span>
-                                </div>
-                                <p className="text-[10px] text-slate-400 font-medium italic">Exclude high-match segments (Fuzzy/Match) from the QA report.</p>
-                              </div>
-                            </div>
-
-                            <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-6 flex items-start gap-4">
-                               <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm shrink-0">
-                                 <Info className="w-5 h-5 text-indigo-500" />
-                               </div>
-                               <div className="space-y-1">
-                                 <p className="text-sm font-bold text-indigo-900">Supported Formats</p>
-                                 <p className="text-xs text-indigo-700/70 font-medium">Selective filtering is automatically applied to <span className="font-black">.sdlxliff</span>, <span className="font-black">.xlf</span>, and <span className="font-black">.mqxliff</span> files based on metadata tags.</p>
-                               </div>
-                            </div>
 
                             <div className="flex justify-center pt-4">
                               <Button 
@@ -1955,72 +2202,140 @@ export default function App() {
                         )}
 
                         {workspaceTab === 'glossary' && (
-                          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                             <div 
-                              className={`dropzone-container ${isDragging ? 'dragging' : ''}`}
-                              onDragOver={handleDragOver}
-                              onDragLeave={handleDragLeave}
-                              onDrop={handleDrop}
-                            >
-                               <svg width="120" height="120" viewBox="0 0 120 120" fill="none" className="mb-6 opacity-80">
-                                  <path d="M40 30H80V90H40V30Z" fill="white" stroke="#94A3B8" strokeWidth="2" />
-                                  <path d="M40 45H80M40 60H80M40 75H80" stroke="#CBD5E1" strokeWidth="1.5" />
-                                  <circle cx="80" cy="90" r="15" fill="#FF5C00" />
-                                  <path d="M75 90H85M80 85V95" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                               </svg>
-                               <p className="text-muted-foreground text-sm font-medium">Drop your glossary files here</p>
-                             </div>
-                             <div className="flex justify-center">
-                               <Input
-                                  type="file"
-                                  accept=".xlsx,.xls,.csv,.txt,.tbx,.tmx"
-                                  onChange={handleGlossaryUpload}
-                                  className="hidden"
-                                  id="glossary-upload-main"
-                                />
-                                <Button asChild variant="outline" className="action-btn-secondary h-11 px-10 rounded-md border-slate-200">
-                                  <label htmlFor="glossary-upload-main" className="cursor-pointer">Add files</label>
-                                </Button>
-                             </div>
-                             {glossaryFiles.length > 0 && (
-                                <div className="max-w-md mx-auto text-center">
-                                  <p className="text-xs font-bold text-green-600 flex items-center justify-center gap-2 bg-green-50 py-2.5 px-6 rounded-full border border-green-100 shadow-sm">
-                                    <CheckCircle className="w-4 h-4" />
-                                    Active Glossary: {glossaryFiles[0]} ({config.glossary?.length || 0} terms)
-                                  </p>
-                                </div>
-                             )}
-                             <div className="flex justify-center mt-8">
-                              <Button 
-                                onClick={() => setWorkspaceTab('settings')}
-                                className="px-8 h-12 rounded-xl bg-slate-900 text-white font-bold"
+                          <div className={`animate-in fade-in slide-in-from-bottom-4 duration-500 ${config.glossary && config.glossary.length > 0 ? 'grid grid-cols-1 md:grid-cols-2 gap-8 items-start' : 'space-y-8 max-w-2xl mx-auto'}`}>
+                            {/* Left Column: Upload */}
+                            <div className="space-y-6 flex flex-col justify-center">
+                              <div 
+                                className={`dropzone-container ${isDragging ? 'dragging' : ''} flex flex-col items-center justify-center p-8`}
+                                onDragOver={handleDragOver}
+                                onDragLeave={handleDragLeave}
+                                onDrop={handleDrop}
                               >
-                                Next: QA Settings <ArrowRight className="w-4 h-4 ml-2" />
-                              </Button>
+                                 <svg width="120" height="120" viewBox="0 0 120 120" fill="none" className="mb-6 opacity-80 mx-auto">
+                                    <path d="M40 30H80V90H40V30Z" fill="white" stroke="#94A3B8" strokeWidth="2" />
+                                    <path d="M40 45H80M40 60H80M40 75H80" stroke="#CBD5E1" strokeWidth="1.5" />
+                                    <circle cx="80" cy="90" r="15" fill="#FF5C00" />
+                                    <path d="M75 90H85M80 85V95" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                                 </svg>
+                                 <p className="text-muted-foreground text-sm font-medium text-center">Drop your glossary files here</p>
+                              </div>
+                              <div className="flex justify-center">
+                                 <Input
+                                    type="file"
+                                    accept=".xlsx,.xls,.csv,.txt,.tbx,.tmx"
+                                    onChange={handleGlossaryUpload}
+                                    className="hidden"
+                                    id="glossary-upload-main"
+                                  />
+                                  <Button asChild variant="outline" className="action-btn-secondary h-11 px-10 rounded-md border-slate-200">
+                                    <label htmlFor="glossary-upload-main" className="cursor-pointer">Add files</label>
+                                  </Button>
+                              </div>
+                              {glossaryFiles.length > 0 && (
+                                 <div className="max-w-md mx-auto text-center">
+                                   <p className="text-xs font-bold text-green-600 flex items-center justify-center gap-2 bg-green-50 py-2.5 px-6 rounded-full border border-green-100 shadow-sm">
+                                     <CheckCircle className="w-4 h-4" />
+                                     Active Glossary: {glossaryFiles[0]} ({config.glossary?.length || 0} terms)
+                                   </p>
+                                 </div>
+                              )}
+                              <div className="flex justify-center pt-2">
+                               <Button 
+                                 onClick={() => setWorkspaceTab('settings')}
+                                 className="px-8 h-12 rounded-xl bg-slate-900 text-white font-bold"
+                               >
+                                 Next: QA Settings <ArrowRight className="w-4 h-4 ml-2" />
+                               </Button>
+                              </div>
                             </div>
+
+                            {/* Right Column: Preview */}
+                            {config.glossary && config.glossary.length > 0 && (
+                              <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 space-y-4 h-full flex flex-col justify-between">
+                                <div className="space-y-4 flex-1">
+                                  <div className="flex items-center justify-between">
+                                    <h3 className="text-sm font-bold text-slate-800">Glossary Preview</h3>
+                                    <button 
+                                      onClick={() => {
+                                        setConfig(prev => ({ ...prev, glossary: [] }));
+                                        setGlossaryFiles([]);
+                                      }}
+                                      className="text-xs text-red-500 hover:text-red-700 font-bold hover:underline"
+                                    >
+                                      Remove Glossary
+                                    </button>
+                                  </div>
+                                  <Input 
+                                    placeholder="Search glossary terms..." 
+                                    value={glossarySearch}
+                                    onChange={(e) => setGlossarySearch(e.target.value)}
+                                    className="bg-white border-slate-200 text-xs h-10 rounded-xl"
+                                  />
+                                  <div className="max-h-[280px] overflow-y-auto custom-scrollbar border border-slate-200/60 rounded-xl bg-white">
+                                    <table className="w-full text-xs text-left border-collapse">
+                                      <thead className="bg-slate-50 text-[10px] uppercase font-bold tracking-wider text-slate-400 border-b">
+                                        <tr>
+                                          <th className="p-3">Source Term</th>
+                                          <th className="p-3">Target Translation</th>
+                                          <th className="p-3 w-[60px] text-center">Action</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {config.glossary
+                                          .filter(t => 
+                                            t.source.toLowerCase().includes(glossarySearch.toLowerCase()) || 
+                                            t.target.toLowerCase().includes(glossarySearch.toLowerCase())
+                                          )
+                                          .slice(0, 100)
+                                          .map((term, index) => (
+                                            <tr key={index} className="border-b last:border-0 hover:bg-slate-50">
+                                              <td className="p-3 font-medium text-slate-800">{term.source}</td>
+                                              <td className="p-3 font-mono text-primary font-medium">{term.target}</td>
+                                              <td className="p-3 text-center">
+                                                <button 
+                                                  onClick={() => {
+                                                    setConfig(prev => ({
+                                                      ...prev,
+                                                      glossary: prev.glossary?.filter((_, idx) => idx !== index) || []
+                                                    }));
+                                                  }}
+                                                  className="text-red-500 hover:text-red-700 font-bold text-xs"
+                                                >
+                                                  Delete
+                                                </button>
+                                              </td>
+                                            </tr>
+                                          ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
 
                         {workspaceTab === 'settings' && (
                           <div className="space-y-6">
-                            <div className="flex h-[640px] bg-white rounded-3xl border border-slate-200 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 shadow-sm">
+                            <div className="flex h-[500px] bg-white rounded-3xl border border-slate-200 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 shadow-sm">
                             {/* Sidebar */}
-                            <div className="settings-sidebar bg-slate-50/50 p-6 flex flex-col w-[280px]">
+                            <div className="settings-sidebar bg-slate-50/50 p-6 flex flex-col w-[280px] overflow-y-auto custom-scrollbar">
                               <div className="space-y-1">
                                 <div 
-                                  onClick={() => setSelectedCheckGroup('terminology')}
+                                  onClick={() => {
+                                    setSelectedCheckGroup('terminology');
+                                    setSelectedSubCategory('untranslatables');
+                                  }}
                                   className={`settings-sidebar-item relative ${selectedCheckGroup === 'terminology' ? 'active' : ''}`}
                                 >
-                                  {selectedCheckGroup === 'terminology' && <span className="absolute left-1 w-1.5 h-1.5 bg-primary rounded-full" />}
                                   Common
                                 </div>
                                 
                                 {selectedCheckGroup === 'terminology' && (
                                   <div className="pl-6 border-l-2 border-slate-100 ml-6 my-2 space-y-0.5">
                                     {[
-                                      { id: 'omissions', label: 'Omissions' },
                                       { id: 'untranslatables', label: 'Untranslatables' },
-                                      { id: 'forbidden', label: 'Forbidden words' },
+                                      { id: 'terminology', label: 'Terminology' },
                                       { id: 'case', label: 'Letter case' },
                                       { id: 'punctuation', label: 'Punctuation and spacing' },
                                       { id: 'quotes', label: 'Quotes and apostrophes' },
@@ -2043,33 +2358,32 @@ export default function App() {
                                 <div 
                                   onClick={() => {
                                     setSelectedCheckGroup('consistency');
-                                    setSelectedSubCategory('');
+                                    setSelectedSubCategory('consistency');
                                   }}
                                   className={`settings-sidebar-item relative ${selectedCheckGroup === 'consistency' ? 'active' : ''}`}
                                 >
-                                  {selectedCheckGroup === 'consistency' && <span className="absolute left-1 w-1.5 h-1.5 bg-primary rounded-full" />}
                                   Consistency
                                 </div>
                                 <div 
                                   onClick={() => {
-                                    setSelectedCheckGroup('terminology');
-                                    setSelectedSubCategory('terminology');
+                                    setSelectedCheckGroup('spelling');
+                                    setSelectedSubCategory('spelling');
                                   }}
-                                  className={`settings-sidebar-item relative ${selectedCheckGroup === 'terminology' && selectedSubCategory === 'terminology' ? 'active' : ''}`}
+                                  className={`settings-sidebar-item relative ${selectedCheckGroup === 'spelling' ? 'active' : ''}`}
                                 >
-                                  Terminology
+                                  Spelling
                                 </div>
                               </div>
                             </div>
-
+ 
                             {/* Separator */}
                             <div className="w-px bg-slate-200 my-6" />
-
+ 
                             {/* Content */}
                             <div className="flex-1 p-10 overflow-y-auto custom-scrollbar">
                               <div className="space-y-8">
                                 {(() => {
-
+ 
                                   let rulesToShow: IssueType[] = [];
                                   
                                   if (selectedSubCategory && SUB_CATEGORY_RULES[selectedSubCategory]) {
@@ -2079,7 +2393,9 @@ export default function App() {
                                       .filter(([ruleType]) => ISSUE_CATEGORY_MAP[ruleType] === selectedCheckGroup)
                                       .map(([type]) => type);
                                   }
-
+ 
+                                  rulesToShow = Array.from(new Set(rulesToShow));
+ 
                                   if (rulesToShow.length === 0) {
                                     return <div className="text-slate-400 text-sm font-medium italic">Select a category to view checks.</div>;
                                   }
@@ -2138,121 +2454,121 @@ export default function App() {
                         )}
 
                         {workspaceTab === 'length' && (
-                           <div className="bg-white rounded-[40px] border border-slate-200/60 p-16 shadow-2xl shadow-slate-200/20 animate-in fade-in zoom-in duration-700">
-                             <div className="max-w-4xl mx-auto space-y-16">
-                               <div className="space-y-4">
-                                 <h2 className="text-4xl font-black tracking-tight text-slate-900 uppercase">Length Constraints</h2>
-                                 <p className="text-slate-400 font-medium text-lg">Define maximum character limits and expansion thresholds for high-fidelity translation quality.</p>
-                               </div>
-
-                               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                                 {/* Character Limit */}
-                                 <div className="group relative bg-slate-50/50 p-10 rounded-[48px] border border-slate-100 hover:border-primary/20 transition-all duration-500 hover:shadow-2xl hover:shadow-slate-200/40">
-                                   <div className="absolute top-8 right-8">
-                                     <Badge variant="outline" className="bg-white text-slate-400 border-slate-100 uppercase tracking-widest text-[10px] font-black px-3 py-1">Absolute</Badge>
-                                   </div>
-                                   <div className="space-y-8">
-                                     <div className="flex items-center gap-5">
-                                       <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-100 group-hover:scale-110 transition-transform">
-                                          <Hash className="w-6 h-6 text-primary" />
-                                       </div>
-                                       <div>
-                                         <h3 className="text-xl font-black text-slate-800">Char Limit</h3>
-                                         <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Hard Threshold</p>
-                                       </div>
-                                     </div>
-                                     
-                                     <div className="space-y-6">
-                                       <div className="flex items-center justify-between">
-                                         <span className="text-sm font-bold text-slate-600">Enabled Check</span>
-                                         <Checkbox 
-                                            checked={config.rules['len_char_limit'] !== false}
-                                            onCheckedChange={(checked) => setConfig(prev => ({...prev, rules: {...prev.rules, len_char_limit: checked === true}}))}
-                                            className="w-7 h-7 rounded-xl border-slate-200 data-[state=checked]:bg-primary data-[state=checked]:border-primary" 
-                                         />
-                                       </div>
-                                       <div className="pt-4 space-y-3">
-                                          <div className="flex justify-between items-center">
-                                            <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Max Characters</label>
-                                            <span className="text-xs font-black text-primary bg-primary/5 px-2 py-0.5 rounded-lg">255 Default</span>
-                                          </div>
-                                          <div className="relative">
-                                            <Input type="number" defaultValue={255} className="h-14 bg-white border-slate-100 rounded-2xl px-6 font-black text-slate-700 text-lg focus-visible:ring-primary/20" />
-                                            <div className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300 uppercase tracking-tighter">Units</div>
-                                          </div>
-                                       </div>
-                                     </div>
-                                   </div>
-                                 </div>
-
-                                 {/* Expansion Limit */}
-                                 <div className="group relative bg-indigo-50/30 p-10 rounded-[48px] border border-indigo-100/50 hover:border-indigo-200 transition-all duration-500 hover:shadow-2xl hover:shadow-indigo-200/30">
-                                   <div className="absolute top-8 right-8">
-                                     <Badge variant="outline" className="bg-white text-indigo-400 border-indigo-50 uppercase tracking-widest text-[10px] font-black px-3 py-1">Relative</Badge>
-                                   </div>
-                                   <div className="space-y-8">
-                                     <div className="flex items-center gap-5">
-                                       <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-indigo-50 group-hover:scale-110 transition-transform">
-                                          <Maximize2 className="w-6 h-6 text-indigo-600" />
-                                       </div>
-                                       <div>
-                                         <h3 className="text-xl font-black text-indigo-900">Expansion</h3>
-                                         <p className="text-xs text-indigo-400 font-bold uppercase tracking-widest">Growth Ratio</p>
-                                       </div>
-                                     </div>
-                                     
-                                     <div className="space-y-6">
-                                       <div className="flex items-center justify-between">
-                                         <span className="text-sm font-bold text-indigo-700">Enabled Check</span>
-                                         <Checkbox 
-                                            checked={config.rules['len_expansion_limit'] !== false}
-                                            onCheckedChange={(checked) => setConfig(prev => ({...prev, rules: {...prev.rules, len_expansion_limit: checked === true}}))}
-                                            className="w-7 h-7 rounded-xl border-indigo-200 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600" 
-                                         />
-                                       </div>
-                                       <div className="pt-4 space-y-3">
-                                          <div className="flex justify-between items-center">
-                                            <label className="text-[11px] font-black uppercase tracking-widest text-indigo-400">Max Percentage</label>
-                                            <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg">50% Default</span>
-                                          </div>
-                                          <div className="relative">
-                                            <Input type="number" defaultValue={50} className="h-14 bg-white border-indigo-50 rounded-2xl px-6 font-black text-indigo-700 text-lg focus-visible:ring-indigo-200" />
-                                            <div className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] font-black text-indigo-300 uppercase tracking-tighter">Growth</div>
-                                          </div>
-                                       </div>
-                                   </div>
-                                 </div>
-                               </div>
-                             </div>
-                           </div>
-                         </div>
-                       )}
-                      </div>
-                        
-                      <div className="flex justify-center pt-10 h-24">
-                        <AnimatePresence>
-                          {workspaceTab === 'length' && (
-                            <motion.div
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, scale: 0.95 }}
-                            >
-                              <Button 
-                                onClick={runAllFilesAnalysis}
-                                disabled={files.length === 0}
-                                size="lg"
-                                className={`px-16 py-8 font-black uppercase tracking-[0.2em] text-sm rounded-full shadow-2xl transition-all ${
-                                  files.length > 0 
-                                    ? 'bg-primary text-white shadow-primary/30 hover:scale-[1.02] active:scale-95' 
-                                    : 'bg-slate-200 text-slate-400 cursor-not-allowed grayscale'
-                                }`}
-                              >
-                                <Play className={`w-5 h-5 mr-3 ${files.length > 0 ? 'fill-white' : 'fill-slate-400'}`} />
-                                Run Audit Report
-                              </Button>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
+                          <div className="space-y-8 animate-in fade-in zoom-in duration-700">
+                            <div className="bg-white rounded-[40px] border border-slate-200/60 p-8 md:p-12 shadow-2xl shadow-slate-200/20">
+                              <div className="max-w-4xl mx-auto space-y-8">
+                                <div className="space-y-1.5">
+                                  <h2 className="text-xl font-black tracking-tight text-slate-900 uppercase">Length Constraints</h2>
+                                  <p className="text-slate-400 font-medium text-xs">Define maximum character limits and expansion thresholds for high-fidelity translation quality.</p>
+                                </div>
+ 
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                  {/* Character Limit */}
+                                  <div className="group relative bg-slate-50/50 p-6 md:p-8 rounded-3xl border border-slate-100 hover:border-primary/20 transition-all duration-500 hover:shadow-2xl hover:shadow-slate-200/40">
+                                    <div className="absolute top-6 right-6">
+                                      <Badge variant="outline" className="bg-white text-slate-400 border-slate-100 uppercase tracking-widest text-[10px] font-black px-3 py-1">Absolute</Badge>
+                                    </div>
+                                    <div className="space-y-6">
+                                      <div className="flex items-center gap-5">
+                                        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-100 group-hover:scale-110 transition-transform">
+                                           <Hash className="w-6 h-6 text-primary" />
+                                        </div>
+                                        <div>
+                                          <h3 className="text-lg md:text-xl font-black text-slate-800">Char Limit</h3>
+                                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Hard Threshold</p>
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="space-y-4">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-sm font-bold text-slate-600">Enabled Check</span>
+                                          <Checkbox 
+                                             checked={config.rules['len_char_limit'] !== false}
+                                             onCheckedChange={(checked) => setConfig(prev => ({...prev, rules: {...prev.rules, len_char_limit: checked === true}}))}
+                                             className="w-7 h-7 rounded-xl border-slate-200 data-[state=checked]:bg-primary data-[state=checked]:border-primary" 
+                                          />
+                                        </div>
+                                        <div className="pt-2 space-y-3">
+                                           <div className="flex justify-between items-center">
+                                             <label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Max Characters</label>
+                                             <span className="text-xs font-black text-primary bg-primary/5 px-2 py-0.5 rounded-lg">255 Default</span>
+                                           </div>
+                                           <div className="relative">
+                                             <Input type="number" defaultValue={255} className="h-12 bg-white border-slate-100 rounded-xl px-4 font-black text-slate-700 text-base focus-visible:ring-primary/20" />
+                                             <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300 uppercase tracking-tighter">Units</div>
+                                           </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+ 
+                                  {/* Expansion Limit */}
+                                  <div className="group relative bg-indigo-50/30 p-6 md:p-8 rounded-3xl border border-indigo-100/50 hover:border-indigo-200 transition-all duration-500 hover:shadow-2xl hover:shadow-indigo-200/30">
+                                    <div className="absolute top-6 right-6">
+                                      <Badge variant="outline" className="bg-white text-indigo-400 border-indigo-50 uppercase tracking-widest text-[10px] font-black px-3 py-1">Relative</Badge>
+                                    </div>
+                                    <div className="space-y-6">
+                                      <div className="flex items-center gap-5">
+                                        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-indigo-50 group-hover:scale-110 transition-transform">
+                                           <Maximize2 className="w-6 h-6 text-indigo-600" />
+                                        </div>
+                                        <div>
+                                          <h3 className="text-lg md:text-xl font-black text-indigo-900">Expansion</h3>
+                                          <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">Growth Ratio</p>
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="space-y-4">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-sm font-bold text-indigo-700">Enabled Check</span>
+                                          <Checkbox 
+                                             checked={config.rules['len_expansion_limit'] !== false}
+                                             onCheckedChange={(checked) => setConfig(prev => ({...prev, rules: {...prev.rules, len_expansion_limit: checked === true}}))}
+                                             className="w-7 h-7 rounded-xl border-indigo-200 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600" 
+                                          />
+                                        </div>
+                                        <div className="pt-2 space-y-3">
+                                           <div className="flex justify-between items-center">
+                                             <label className="text-[11px] font-black uppercase tracking-widest text-indigo-400">Max Percentage</label>
+                                             <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg">50% Default</span>
+                                           </div>
+                                           <div className="relative">
+                                             <Input type="number" defaultValue={50} className="h-12 bg-white border-indigo-50 rounded-xl px-4 font-black text-indigo-700 text-base focus-visible:ring-indigo-200" />
+                                             <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-indigo-300 uppercase tracking-tighter">Growth</div>
+                                           </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex justify-center pt-4">
+                              <AnimatePresence>
+                                <motion.div
+                                  initial={{ opacity: 0, y: 10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, scale: 0.95 }}
+                                >
+                                  <Button 
+                                    onClick={runAllFilesAnalysis}
+                                    disabled={files.length === 0}
+                                    size="lg"
+                                    className={`px-16 py-8 font-black uppercase tracking-[0.2em] text-sm rounded-full shadow-2xl transition-all ${
+                                      files.length > 0 
+                                        ? 'bg-primary text-white shadow-primary/30 hover:scale-[1.02] active:scale-95' 
+                                        : 'bg-slate-200 text-slate-400 cursor-not-allowed grayscale'
+                                    }`}
+                                  >
+                                    <Play className={`w-5 h-5 mr-3 ${files.length > 0 ? 'fill-white' : 'fill-slate-400'}`} />
+                                    Run Audit Report
+                                  </Button>
+                                </motion.div>
+                              </AnimatePresence>
+                            </div>
+                          </div>
+                        )}
                       </div>
                   </motion.div>
                 ) : (
@@ -2262,155 +2578,97 @@ export default function App() {
                     animate={{ opacity: 1 }}
                     className="flex flex-col gap-4 w-full"
                   >
-                    <div className="flex justify-start">
-                      <Button
-                        onClick={() => {
-                          setHasRunQA(false);
-                        }}
-                        variant="ghost"
-                        size="sm"
-                        className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-xl px-4 h-10 transition-all border border-border/40 hover:border-primary/20 shadow-sm bg-background/50 hover:shadow"
-                      >
-                        <ArrowLeft className="w-4 h-4" />
-                        Go Back To Workspace
-                      </Button>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 w-full flex-1">
-                    {/* Sidebar - File List */}
-                    <div className="lg:col-span-1 min-w-[240px]">
-                      <Card className="h-[calc(100vh-280px)] flex flex-col overflow-hidden glass border-none shadow-xl shadow-indigo-500/5 gap-0 py-0">
-                        <CardHeader className="p-4 flex-shrink-0 border-b">
-                          <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm font-medium">Files</CardTitle>
-                            <div className="flex gap-1">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7 rounded-full"
-                                    onClick={clearAllFiles}
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Clear all files</TooltipContent>
-                              </Tooltip>
-                              <Input
-                                type="file"
-                                multiple
-                                accept={Object.keys(SUPPORTED_FILE_EXTENSIONS).join(',')}
-                                onChange={(e) => handleFileUpload(e.target.files)}
-                                className="hidden"
-                                id="add-files"
-                              />
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7 rounded-full"
-                                    asChild
-                                  >
-                                    <label htmlFor="add-files" className="cursor-pointer">
-                                      <Upload className="w-4 h-4" />
-                                    </label>
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Add more files</TooltipContent>
-                              </Tooltip>
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="p-0 flex-1 overflow-hidden">
-                          <ScrollArea className="h-full">
-                            <div className="space-y-1 p-3">
-                              {isAnalyzing && files.length === 0 && (
-                                <motion.div 
-                                  initial={{ opacity: 0 }}
-                                  animate={{ opacity: 1 }}
-                                  className="p-4 rounded-xl bg-primary/5 border border-dashed border-primary/20 flex flex-col items-center gap-3"
-                                >
-                                  <RefreshCw className="w-6 h-6 text-primary animate-spin" />
-                                  <p className="text-[10px] font-black uppercase tracking-widest text-primary">Processing Files...</p>
-                                </motion.div>
-                              )}
-                              {results.length > 1 && (
-                                <motion.div
-                                  initial={{ opacity: 0, x: -10 }}
-                                  animate={{ opacity: 1, x: 0 }}
-                                  className={`p-4 rounded-xl cursor-pointer transition-all duration-200 mb-2 ${selectedFile === 'combined'
-                                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
-                                    : 'bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300'
+                    <div className="w-full flex-1">
+                    {/* Main Panel - Expanded to 100% width */}
+                    <div className="w-full">
+                      {selectedFile && (selectedFile === 'combined' || currentResult) ? (
+                        <Card className="h-[calc(100vh-250px)] flex flex-col overflow-hidden glass border-none shadow-xl shadow-indigo-500/5 gap-0 py-0">
+                          <CardHeader className="p-4 flex-shrink-0 border-b">
+                            {/* Horizontal Tabs for Files */}
+                            <div className="flex items-center justify-between border-b pb-3 mb-4 w-full gap-4">
+                              <div className="flex items-center gap-2 overflow-x-auto max-w-[calc(100%-100px)] scrollbar-none py-1">
+                                {results.length > 1 && (
+                                  <button
+                                    onClick={() => setSelectedFile('combined')}
+                                    className={`px-4 py-2 text-xs font-bold rounded-xl transition-all duration-200 flex items-center gap-2 flex-shrink-0 ${
+                                      selectedFile === 'combined'
+                                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
+                                        : 'bg-muted hover:bg-muted/80 text-muted-foreground'
                                     }`}
-                                  onClick={() => setSelectedFile('combined')}
-                                >
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-bold truncate flex items-center gap-2">
-                                        <FileCheck className="w-4 h-4" />
-                                        Combined View
-                                      </p>
-                                      <p className={`text-[10px] mt-0.5 ${selectedFile === 'combined' ? 'text-white/80' : 'text-muted-foreground'}`}>
-                                        {results.length} files • {results.reduce((s, r) => s + r.issues.length, 0)} total issues
-                                      </p>
-                                    </div>
-                                    <Badge variant={selectedFile === 'combined' ? 'secondary' : 'default'} className="bg-indigo-500 text-white border-none">
-                                      All
-                                    </Badge>
-                                  </div>
-                                </motion.div>
-                              )}
-                              {files.map((file, i) => {
-                                const result = results.find(r => r.fileId === file.id);
-                                const issueCount = result?.issues.length || 0;
-
-                                return (
-                                  <motion.div
-                                    key={file.id}
-                                    initial={{ opacity: 0, x: -10 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ delay: i * 0.05 }}
-                                    className={`p-4 rounded-xl cursor-pointer transition-all duration-200 ${selectedFile === file.id
-                                      ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
-                                      : 'hover:bg-primary/10'
-                                      }`}
-                                    onClick={() => setSelectedFile(file.id)}
                                   >
-                                    <div className="flex items-start justify-between">
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium truncate">{file.name}</p>
-                                        <p className={`text-[10px] mt-0.5 ${selectedFile === file.id
-                                          ? 'text-primary-foreground/80'
-                                          : 'text-muted-foreground'
-                                          }`}>
-                                          {file.units.length} units
-                                        </p>
-                                      </div>
+                                    <FileCheck className="w-3.5 h-3.5" />
+                                    Combined Report ({results.reduce((s, r) => s + r.issues.length, 0)})
+                                  </button>
+                                )}
+                                {files.map((file) => {
+                                  const result = results.find(r => r.fileId === file.id);
+                                  const issueCount = result?.issues.length || 0;
+                                  const isActive = selectedFile === file.id;
+
+                                  return (
+                                    <button
+                                      key={file.id}
+                                      onClick={() => setSelectedFile(file.id)}
+                                      className={`px-4 py-2 text-xs font-bold rounded-xl transition-all duration-200 flex items-center gap-2 flex-shrink-0 max-w-[200px] ${
+                                        isActive
+                                          ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20'
+                                          : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                                      }`}
+                                    >
+                                      <span className="truncate">{file.name}</span>
                                       {issueCount > 0 && (
                                         <Badge
-                                          variant={selectedFile === file.id ? 'secondary' : 'destructive'}
-                                          className="text-[10px] h-4 min-w-[20px] justify-center px-1 rounded-full"
+                                          variant={isActive ? 'secondary' : 'destructive'}
+                                          className="text-[9px] h-3.5 min-w-[16px] justify-center px-1 rounded-full flex-shrink-0"
                                         >
                                           {issueCount}
                                         </Badge>
                                       )}
-                                    </div>
-                                  </motion.div>
-                                );
-                              })}
-                            </div>
-                          </ScrollArea>
-                        </CardContent>
-                      </Card>
-                    </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
 
-                    {/* Main Panel - Now 4 columns instead of 3 for more width */}
-                    <div className="lg:col-span-4">
-                      {selectedFile && (selectedFile === 'combined' || currentResult) ? (
-                        <Card className="h-[calc(100vh-250px)] flex flex-col overflow-hidden glass border-none shadow-xl shadow-indigo-500/5 gap-0 py-0">
-                          <CardHeader className="p-4 flex-shrink-0 border-b">
+                              {/* Sidebar Actions relocated next to horizontal tabs */}
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                <Input
+                                  type="file"
+                                  multiple
+                                  accept={Object.keys(SUPPORTED_FILE_EXTENSIONS).join(',')}
+                                  onChange={(e) => handleFileUpload(e.target.files)}
+                                  className="hidden"
+                                  id="add-files-horizontal"
+                                />
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      className="h-8 w-8 rounded-xl border-border/50 hover:bg-accent"
+                                      asChild
+                                    >
+                                      <label htmlFor="add-files-horizontal" className="cursor-pointer flex items-center justify-center">
+                                        <Upload className="w-4 h-4 text-muted-foreground" />
+                                      </label>
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Add more files</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      className="h-8 w-8 rounded-xl border-border/50 hover:bg-destructive/5 hover:text-destructive"
+                                      onClick={clearAllFiles}
+                                    >
+                                      <Trash2 className="w-4 h-4 text-muted-foreground" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Clear all files</TooltipContent>
+                                </Tooltip>
+                              </div>
+                            </div>
                             {/* Summary Line (Image 2 reference) */}
                             <div className="mb-4 text-sm font-semibold text-muted-foreground/80 flex items-center gap-1.5 px-2 py-1 bg-muted/30 rounded-lg w-fit transition-all hover:bg-muted/50">
                               <span className="text-indigo-600 dark:text-indigo-400 font-black">TOTAL</span>
@@ -2474,10 +2732,10 @@ export default function App() {
                                 </div>
 
                                 <Select onValueChange={(v) => exportReport(v)}>
-                                  <SelectTrigger className="w-[120px] h-9 rounded-full">
-                                    <Download className="w-3.5 h-3.5 mr-2" />
-                                    <SelectValue placeholder="Export" />
-                                  </SelectTrigger>
+                                   <SelectTrigger className="w-[95px] h-8 rounded-full text-[11px] font-black gap-1 flex items-center justify-center border-border/60 hover:bg-accent transition-colors">
+                                     <Download className="w-3.5 h-3.5" />
+                                     <span>Export</span>
+                                   </SelectTrigger>
                                   <SelectContent>
                                     <div className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground uppercase">HTML Reports</div>
                                     <SelectItem value="html-professional">Professional</SelectItem>
@@ -2494,7 +2752,7 @@ export default function App() {
                           </CardHeader>
 
                           {/* Filters */}
-                          <div className="px-6 pb-4">
+                          <div className="px-6 pb-4 space-y-3">
                             <div className="flex flex-wrap items-center gap-3">
                               <div className="flex items-center gap-2 flex-1 min-w-[200px]">
                                 <div className="relative flex-1">
@@ -2525,6 +2783,31 @@ export default function App() {
                                 </div>
                               </div>
                             </div>
+
+                            {/* Category Filter Pills */}
+                            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                              {[
+                                { id: 'all', label: 'All' },
+                                { id: 'terminology', label: 'Terminology' },
+                                { id: 'spelling', label: 'Spelling' },
+                                { id: 'consistency', label: 'Consistency' },
+                                { id: 'punctuation', label: 'Punctuation & Space' },
+                                { id: 'tags', label: 'Tags' },
+                                { id: 'length', label: 'Length' }
+                              ].map(cat => (
+                                <button
+                                  key={cat.id}
+                                  onClick={() => setCategoryFilter(cat.id)}
+                                  className={`text-[10px] md:text-xs font-bold px-3 py-1 rounded-full transition-all border ${
+                                    categoryFilter === cat.id
+                                      ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                                      : 'bg-background text-muted-foreground border-border hover:bg-muted/40 hover:text-foreground'
+                                  }`}
+                                >
+                                  {cat.label}
+                                </button>
+                              ))}
+                            </div>
                           </div>
 
                           {/* Issues Table */}
@@ -2537,24 +2820,24 @@ export default function App() {
                                </ScrollArea>
                             ) : (
                             <div className="w-full h-full overflow-auto flex-1">
-                              <Table className="min-w-[1500px]">
+                              <Table className="w-full min-w-[1000px] table-fixed">
                                 <TableHeader className="bg-muted/30 sticky top-0 z-10 backdrop-blur-md">
                                     <TableRow className="hover:bg-transparent">
-                                    <TableHead className="w-[60px] font-black uppercase tracking-tighter text-[10px]">Ref</TableHead>
-                                    <TableHead className="w-[80px] font-black uppercase tracking-tighter text-[10px]">Locked</TableHead>
-                                    <TableHead className="w-[100px] font-black uppercase tracking-tighter text-[10px]">Conf</TableHead>
-                                    <TableHead className="w-[80px] font-black uppercase tracking-tighter text-[10px]">Match %</TableHead>
-                                    <TableHead className="w-[100px] font-black uppercase tracking-tighter text-[10px]">Severity</TableHead>
-                                    <TableHead className="w-[160px] font-black uppercase tracking-tighter text-[10px]">Issue Type</TableHead>
-                                    <TableHead className="font-black uppercase tracking-tighter text-[10px] w-[350px] min-w-[300px]">Source</TableHead>
-                                    <TableHead className="font-black uppercase tracking-tighter text-[10px] w-[350px] min-w-[300px]">Target</TableHead>
-                                    <TableHead className="font-black uppercase tracking-tighter text-[10px] min-w-[300px]">Audit Comment</TableHead>
+                                    <TableHead className="w-[55px] font-black uppercase tracking-tighter text-[10px]">Ref</TableHead>
+                                    <TableHead className="w-[60px] font-black uppercase tracking-tighter text-[10px]">Locked</TableHead>
+                                    <TableHead className="w-[65px] font-black uppercase tracking-tighter text-[10px]">Conf</TableHead>
+                                    <TableHead className="w-[70px] font-black uppercase tracking-tighter text-[10px]">Match %</TableHead>
+                                    <TableHead className="w-[85px] font-black uppercase tracking-tighter text-[10px]">Severity</TableHead>
+                                    <TableHead className="w-[140px] font-black uppercase tracking-tighter text-[10px]">Issue Type</TableHead>
+                                    <TableHead className="font-black uppercase tracking-tighter text-[10px] w-[28%] min-w-[180px]">Source</TableHead>
+                                    <TableHead className="font-black uppercase tracking-tighter text-[10px] w-[28%] min-w-[180px]">Target</TableHead>
+                                    <TableHead className="font-black uppercase tracking-tighter text-[10px] w-[28%] min-w-[180px]">Audit Comment</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                   {filteredIssues.length === 0 ? (
                                     <TableRow>
-                                      <TableCell colSpan={6} className="h-32 text-center text-muted-foreground font-bold">
+                                      <TableCell colSpan={9} className="h-32 text-center text-muted-foreground font-bold">
                                         No issues found matching your filters.
                                       </TableCell>
                                     </TableRow>
@@ -2572,7 +2855,7 @@ export default function App() {
                                     return Object.entries(groupedByCategory).map(([categoryLabel, issues]) => (
                                       <React.Fragment key={categoryLabel}>
                                         <TableRow className="bg-muted/40 hover:bg-muted/40 font-black">
-                                          <TableCell colSpan={6} className="py-3 px-4 text-xs tracking-wider uppercase font-black text-foreground">
+                                          <TableCell colSpan={9} className="py-3 px-4 text-xs tracking-wider uppercase font-black text-foreground">
                                             <span className="flex items-center gap-2">
                                               <span>{categoryLabel}</span>
                                               <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary font-black border-none">{issues.length} {issues.length === 1 ? 'issue' : 'issues'}</Badge>
@@ -2616,7 +2899,7 @@ export default function App() {
                                                 {issue.severity}
                                               </Badge>
                                             </TableCell>
-                                            <TableCell className="font-bold text-xs align-top pt-4">{ISSUE_TYPE_LABELS[issue.type]}</TableCell>
+                                            <TableCell className="font-bold text-[11px] align-top pt-4 whitespace-normal break-words pr-3">{ISSUE_TYPE_LABELS[issue.type]}</TableCell>
                                             <TableCell className="align-top pt-4">
                                               <div className="text-xs font-mono whitespace-normal break-words leading-relaxed py-1">
                                                 <HighlightText text={issue.source} />
@@ -2627,8 +2910,8 @@ export default function App() {
                                                 <HighlightText text={issue.target} />
                                               </div>
                                             </TableCell>
-                                            <TableCell className="align-top pt-4">
-                                               <p className="text-xs text-muted-foreground leading-relaxed whitespace-normal break-words py-1">
+                                            <TableCell className="align-top pt-4 whitespace-normal break-words pr-3">
+                                               <p className="text-xs text-muted-foreground leading-relaxed py-1">
                                                  <HighlightText text={issue.message} />
                                                </p>
                                             </TableCell>
@@ -2674,7 +2957,7 @@ export default function App() {
                                             {issue.severity}
                                           </Badge>
                                         </TableCell>
-                                        <TableCell className="font-bold text-xs align-top pt-4">{ISSUE_TYPE_LABELS[issue.type]}</TableCell>
+                                        <TableCell className="font-bold text-[11px] align-top pt-4 whitespace-normal break-words pr-3">{ISSUE_TYPE_LABELS[issue.type]}</TableCell>
                                         <TableCell className="align-top pt-4">
                                           <div className="text-xs font-mono whitespace-pre-wrap break-words leading-relaxed">
                                             <HighlightText text={issue.source} />
@@ -2685,7 +2968,7 @@ export default function App() {
                                             <HighlightText text={issue.target} />
                                           </div>
                                         </TableCell>
-                                        <TableCell className="align-top pt-4">
+                                        <TableCell className="align-top pt-4 whitespace-normal break-words pr-3">
                                           <p className="text-xs text-muted-foreground leading-relaxed">
                                             <HighlightText text={issue.message} />
                                           </p>
@@ -2714,7 +2997,7 @@ export default function App() {
                             </h3>
                             <p className="text-muted-foreground max-w-sm mx-auto">
                               {selectedFile 
-                                ? 'Please wait while we run 114+ linguistic checks against your content.' 
+                                ? 'Please wait while we run multi-tier linguistic checks against your content.' 
                                 : 'Toggle between files on the left to see detailed quality reports and specific linguistic issues.'}
                             </p>
                             
@@ -2802,9 +3085,8 @@ export default function App() {
                             size="sm" 
                             variant="link" 
                             onClick={() => { 
-                              toast.info("Add Credits feature coming soon!", {
-                                description: "Contact sales for enterprise volume."
-                              });
+                              setShowDashboard(true);
+                              toast.info("Select a credit top-up package to purchase credits.");
                             }}
                             className="h-auto p-0 text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700"
                           >
@@ -3085,7 +3367,7 @@ export default function App() {
             <div className="relative">
               <div className="w-24 h-24 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
               <div className="absolute inset-0 flex items-center justify-center">
-                <RefreshCw className="w-10 h-10 text-primary animate-pulse" />
+                <span className="text-4xl font-black text-primary select-none animate-pulse">T</span>
               </div>
             </div>
             <motion.h2

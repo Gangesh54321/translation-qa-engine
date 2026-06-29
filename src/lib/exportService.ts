@@ -76,13 +76,29 @@ export async function exportToExcel(resultOrResults: QAResult | QAResult[], conf
                 groupRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF3CD' } };
                 worksheet.mergeCells(`A${groupRow.number}:D${groupRow.number}`);
 
-                issues.forEach(issue => {
-                    let comments = '';
+                 issues.forEach(issue => {
+                    let comments = issue.message || '';
                     if (issue.type === 'term_translation_mismatch' && issue.glossaryMatches) {
-                        comments = issue.glossaryMatches.map(m => `Glossary: ${m.source} -> ${m.target}`).join('; ');
+                        const glossaryStr = issue.glossaryMatches.map(m => `Glossary: ${m.source} -> ${m.target}`).join('; ');
+                        if (glossaryStr) comments += ` [${glossaryStr}]`;
                     }
                     const row = worksheet.addRow([`${result.fileName}_#${issue.index || issue.key}`, issue.source, issue.target, comments]);
                     row.alignment = { wrapText: true, vertical: 'middle' };
+                    
+                    let bgColor = 'FFFFFFFF';
+                    if (issue.severity === 'error') bgColor = 'FFFFE3E3';
+                    else if (issue.severity === 'warning') bgColor = 'FFFFF9E6';
+                    else if (issue.severity === 'info') bgColor = 'FFEBF5FF';
+
+                    row.eachCell(cell => {
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+                        cell.border = {
+                            top: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+                            bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+                            left: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+                            right: { style: 'thin', color: { argb: 'FFE0E0E0' } }
+                        };
+                    });
                 });
             });
         });
@@ -109,12 +125,28 @@ export async function exportToExcel(resultOrResults: QAResult | QAResult[], conf
             worksheet.mergeCells(`A${groupRow.number}:D${groupRow.number}`);
 
             issues.forEach(issue => {
-                let comments = '';
+                let comments = issue.message || '';
                 if (issue.type === 'term_translation_mismatch' && issue.glossaryMatches) {
-                    comments = issue.glossaryMatches.map(m => `Glossary: ${m.source} -> ${m.target}`).join('; ');
+                    const glossaryStr = issue.glossaryMatches.map(m => `Glossary: ${m.source} -> ${m.target}`).join('; ');
+                    if (glossaryStr) comments += ` [${glossaryStr}]`;
                 }
                 const row = worksheet.addRow([`${issue.fileName}_#${issue.index || issue.key}`, issue.source, issue.target, comments]);
                 row.alignment = { wrapText: true, vertical: 'middle' };
+                
+                let bgColor = 'FFFFFFFF';
+                if (issue.severity === 'error') bgColor = 'FFFFE3E3';
+                else if (issue.severity === 'warning') bgColor = 'FFFFF9E6';
+                else if (issue.severity === 'info') bgColor = 'FFEBF5FF';
+
+                row.eachCell(cell => {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+                    cell.border = {
+                        top: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+                        bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+                        left: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+                        right: { style: 'thin', color: { argb: 'FFE0E0E0' } }
+                    };
+                });
             });
         });
     }
@@ -123,7 +155,7 @@ export async function exportToExcel(resultOrResults: QAResult | QAResult[], conf
     worksheet.getColumn(1).width = 30; // File & Segment
     worksheet.getColumn(2).width = 45; // Source
     worksheet.getColumn(3).width = 45; // Target
-    worksheet.getColumn(4).width = 25; // Comments
+    worksheet.getColumn(4).width = 35; // Comments
 
     // Buffer and Download
     const buffer = await workbook.xlsx.writeBuffer();
@@ -203,9 +235,10 @@ export function exportToHTML(resultOrResults: QAResult | QAResult[], config: QAC
                     <table class="issues-table">
                         <thead>
                             <tr>
-                                <th style="width: 20%">Key / Info</th>
-                                <th style="width: 40%">Source</th>
-                                <th style="width: 40%">Target</th>
+                                <th style="width: 15%">Key / Info</th>
+                                <th style="width: 30%">Source</th>
+                                <th style="width: 30%">Target</th>
+                                <th style="width: 25%">Audit Comment</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -213,8 +246,9 @@ export function exportToHTML(resultOrResults: QAResult | QAResult[], config: QAC
                                 <tr>
                                     <td class="file-cell">${result.fileName}_#${issue.index || issue.key}</td>
                                     <td class="source-cell">${highlightInHtml(issue.source, issue.highlights?.source, 'source')}</td>
-                                    <td class="target-cell">
-                                        ${highlightInHtml(issue.target, issue.highlights?.target, 'target')}
+                                    <td class="target-cell">${highlightInHtml(issue.target, issue.highlights?.target, 'target')}</td>
+                                    <td class="comment-cell">
+                                        <div style="font-weight: 500;">${issue.message || ''}</div>
                                         ${renderGlossaryMatches(issue)}
                                     </td>
                                 </tr>
@@ -244,9 +278,10 @@ export function exportToHTML(resultOrResults: QAResult | QAResult[], config: QAC
             <table class="issues-table">
                 <thead>
                     <tr>
-                        <th style="width: 20%">File / Key</th>
-                        <th style="width: 40%">Source</th>
-                        <th style="width: 40%">Target</th>
+                        <th style="width: 15%">File / Key</th>
+                        <th style="width: 30%">Source</th>
+                        <th style="width: 30%">Target</th>
+                        <th style="width: 25%">Audit Comment</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -254,8 +289,9 @@ export function exportToHTML(resultOrResults: QAResult | QAResult[], config: QAC
                         <tr>
                             <td class="file-cell">${issue.fileName}_#${issue.index || issue.key}</td>
                             <td class="source-cell">${highlightInHtml(issue.source, issue.highlights?.source, 'source')}</td>
-                            <td class="target-cell">
-                                ${highlightInHtml(issue.target, issue.highlights?.target, 'target')}
+                            <td class="target-cell">${highlightInHtml(issue.target, issue.highlights?.target, 'target')}</td>
+                            <td class="comment-cell">
+                                <div style="font-weight: 500;">${issue.message || ''}</div>
                                 ${renderGlossaryMatches(issue)}
                             </td>
                         </tr>
@@ -330,6 +366,7 @@ export function exportToHTML(resultOrResults: QAResult | QAResult[], config: QAC
             <style>
                 ${themes[theme]}
                 @media print {
+                    .print-button-container { display: none; }
                     .container { box-shadow: none; padding: 0; }
                     .group-header { break-after: avoid; }
                     .file-header { break-before: page; }
@@ -338,6 +375,11 @@ export function exportToHTML(resultOrResults: QAResult | QAResult[], config: QAC
         </head>
         <body>
             <div class="container">
+                <div class="print-button-container" style="text-align: right; margin-bottom: 20px;">
+                    <button onclick="window.print()" style="padding: 10px 20px; background-color: #6366f1; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-family: sans-serif; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                        Print / Save to PDF
+                    </button>
+                </div>
                 <h1>QA Quality Report</h1>
                 
                 <table class="summary-table">

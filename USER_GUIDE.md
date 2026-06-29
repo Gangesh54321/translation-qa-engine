@@ -2,52 +2,57 @@
 
 Welcome to the Translation QA Engine! This guide will help you understand how to use the app step-by-step in simple English.
 
+**TransTech QA Engine** is an industrial-grade linguistic intelligence platform designed for high-precision translation auditing. Supporting over 100 languages with extensive built-in dictionaries, it integrates AI-enhanced spell check, custom glossaries, and multi-format support to ensure flawless localized content at scale.
+
 ---
 
-## Step 1: Sign In
+## Step 1: Sign In & Navigation
 Before you can use the QA Engine, you need to sign in.
-1. Click the **"Open Online QA Engine"** button on the home page.
-2. Enter your email and any password (the app is in demo mode, so any email works!).
-3. Click **"Sign In"**. You will be taken to your dashboard.
+1. Click the **"Sign In"** button in the floating navigation bar (Pill-Nav).
+2. Enter your name and email to create an account. New users receive **5 Free Credits**!
+3. Use the **Pill-Nav** (the floating menu bar at the top) to jump between sections:
+   - Click **Home** or **Features** to see overview information.
+   - Click **QA Engine** to go directly to the workspace where you upload files.
+   - Click **Docs** to read this guide or see detailed documentation.
 
-## Step 2: Upload Your Files
+## Step 2: Manage Your Profile & Credits
+Your user profile is located on the right side of the navigation bar.
+1. **Credits (CR):** You can see your remaining credits next to your avatar. Each file audit uses credits.
+2. **Profile Dropdown:** Click your avatar to open a menu where you can:
+   - Access your **Dashboard** to see detailed usage.
+   - Go to your **Workspace** to start auditing files.
+   - **Sign Out** securely.
+
+## Step 3: Upload Your Files
 Sharing your translation files is easy:
-1. Drag and drop your files into the big dashed box in the center.
-2. Or, click **"Drag & Drop or Browse Files"** to select them from your computer.
-3. **Supported Formats:** JSON, XLIFF, XML, PO, CSV, TXT, and many more!
+1. Navigate to the **QA Engine** or **Workspace**.
+2. Drag and drop your files into the big dashed box in the center.
+3. Or, click **"Drag & Drop or Browse Files"** to select them from your computer.
+4. **Supported Formats:** SDLXLIFF, MQXLIFF/MQXLZ (MemoQ), JSON, TMX, CSV, TSV, PO, and more!
+5. **Advanced Tag Support:** Our engine now supports mixed-bracket tags (e.g., `[1}`, `{2]`) used in modern MemoQ workflows.
 
-## Step 3: Review the Results
-Once you upload a file, the app automatically checks it for errors.
-1. Look at the **left sidebar** to see your list of files.
-2. Click on a file name to see its specific issues.
-3. Use the **Search bar** at the top if you are looking for a specific word.
-4. Use the **Filters** (Errors, Warnings, Info) to focus on the most important problems.
+## Step 4: Review the Results
+Once you upload a file, click **"Run QA Analysis"** to start the engine.
+1. Look at the **Files Tab** to see your list of uploaded files.
+2. The app **automatically detects languages** and applies preset terminology checks.
+3. Use the **Search bar** to find specific segments or errors.
+4. Use the **Severity Filters** (Errors, Warnings, Info) to focus on critical issues.
 
-## Step 4: Fix Issues (Optional)
-If the app finds a common mistake, it might offer an **"Apply Correction"** button:
-1. Click on an issue in the list to open the **Issue Inspector**.
-2. If a suggestion is available, just click **"Apply Correction"** to fix it instantly!
+## Step 5: Add a Custom Glossary
+To use your own vocabulary list:
+1. Go to the **Glossary Tab** in the workspace.
+2. Upload your glossary file (CSV, Excel, or TMX).
+3. The engine will now cross-reference your translations with your custom terms.
 
-## Step 5: Add a Glossary (Vocabulary List)
-To make your audit even smarter, you can add a glossary:
-1. Click the **"Add Glossary"** button in the top right header.
-2. Select your glossary file (CSV, TSV, or TMX).
-3. The app will now check if you used the correct terminology from your list.
-
-## Step 6: Change the Look (Themes)
-You can change the colors of the app at any time:
-1. Click the **Theme** button (it looks like a palette) in the top right.
-2. Choose from **Modern**, **Midnight** (Dark), **Nature** (Green), or **Sunset** (Orange).
-
-## Step 7: Export Your Report
-When you are finished, you can save your results:
-1. Click the **"Export"** button in the dashboard.
+## Step 6: Export Your Report
+When you are finished, save your results for your team:
+1. Click the **"Export"** button in the workspace.
 2. Choose a format:
-   * **Professional HTML:** A beautiful webpage report.
-   * **Excel Export:** A spreadhseet for data analysis.
-   * **Bilingual RTF:** A Word document for manual review.
+   - **Professional HTML:** A beautiful, interactive webpage report.
+   - **Excel Export:** A structured spreadsheet for deep analysis.
+   - **Bilingual RTF:** A Word-friendly document for manual review.
 
 ---
 
 **Need Help?**
-Click the **Docs** or **Help** tabs in the header to find more information!
+Click the **Docs** tab in the header or contact support via the Dashboard!

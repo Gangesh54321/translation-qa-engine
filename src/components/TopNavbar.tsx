@@ -1,5 +1,6 @@
 import { ShieldCheck, Zap, LogOut, Settings } from 'lucide-react';
 import { Button } from './ui/button';
+import { ThemeToggle } from './ThemeToggle';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,7 +39,7 @@ export function TopNavbar({ user, onSignOut, onNavigateHome, onNavigateWorkspace
           onClick={onNavigateHome}
         >
           <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary text-white">
-            <ShieldCheck className="w-5 h-5" />
+            <span className="font-black text-lg select-none">T</span>
           </div>
           <span className="font-black text-xl tracking-tight hidden sm:inline-block">
             TransTech <span className="text-primary">Hub</span>
@@ -63,6 +64,7 @@ export function TopNavbar({ user, onSignOut, onNavigateHome, onNavigateWorkspace
 
         {/* Right: User Dashboard */}
         <div className="flex items-center gap-4">
+          <ThemeToggle />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

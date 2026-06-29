@@ -10,6 +10,10 @@ A high-performance, web-based Quality Assurance tool for professional translatio
 - **Human-Readable Reports**: Export detailed LQA reports in Excel and HTML formats using the descriptive `filename_#segid` pattern.
 - **Dynamic Highlights**: Instantly visualize source and target terminology mismatches with color-coded highlighting.
 
+## 📖 Product Showcase
+
+For a full breakdown of the engine's capabilities, 114+ professional rules, and supported formats, check out our **[Blog Introduction](./BLOG_INTRODUCTION.md)**.
+
 ## 🛠️ Local Development
 
 ### Prerequisites

@@ -1,4 +1,4 @@
-import ExcelJS from 'exceljs';
+import ExcelJS from 'exceljs/dist/exceljs.min.js';
 import type { QAResult, IssueType, QAConfig, QAIssue, TranslationFile } from '@/types/translation';
 import { ISSUE_TYPE_LABELS } from '@/types/translation';
 

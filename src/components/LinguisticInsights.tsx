@@ -23,10 +23,13 @@ export const LinguisticInsights: React.FC<LinguisticInsightsProps> = ({ results 
     let totalWarnings = 0;
     let totalInfo = 0;
 
+    let totalUnits = 0;
+
     results.forEach(res => {
       totalErrors += res.stats.errors;
       totalWarnings += res.stats.warnings;
       totalInfo += res.stats.info;
+      totalUnits += res.totalUnits || 0;
 
       res.issues.forEach(issue => {
         const category = ISSUE_CATEGORY_MAP[issue.type] || 'other';
@@ -44,9 +47,19 @@ export const LinguisticInsights: React.FC<LinguisticInsightsProps> = ({ results 
       totalErrors,
       totalWarnings,
       totalInfo,
-      totalIssues: totalErrors + totalWarnings + totalInfo
+      totalIssues: totalErrors + totalWarnings + totalInfo,
+      totalUnits
     };
   }, [results]);
+
+  const linguisticScore = useMemo(() => {
+    if (stats.totalUnits === 0) return 100;
+    // Industry-standard translation QA weighted penalty score:
+    // Errors count as 5 points, warnings as 2 points, info as 0.5 points
+    const penaltyPoints = (stats.totalErrors * 5) + (stats.totalWarnings * 2) + (stats.totalInfo * 0.5);
+    const score = 100 - (penaltyPoints / stats.totalUnits) * 100;
+    return Math.max(0, Math.min(100, score));
+  }, [stats]);
 
   if (results.length === 0) return null;
 
@@ -59,7 +72,7 @@ export const LinguisticInsights: React.FC<LinguisticInsightsProps> = ({ results 
             <p className="text-[10px] font-black uppercase tracking-widest text-indigo-500">Linguistic Score</p>
             <div className="flex items-baseline gap-2">
               <span className="text-5xl font-black tracking-tighter text-indigo-600">
-                {Math.max(0, 100 - (stats.totalIssues * 2)).toFixed(0)}
+                {linguisticScore.toFixed(0)}
               </span>
               <span className="text-xl font-bold text-indigo-400">/100</span>
             </div>

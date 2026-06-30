@@ -2731,22 +2731,24 @@ export default function App() {
                                   })}
                                 </div>
 
-                                <Select onValueChange={(v) => exportReport(v)}>
-                                   <SelectTrigger className="w-[95px] h-8 rounded-full text-[11px] font-black gap-1 flex items-center justify-center border-border/60 hover:bg-accent transition-colors">
-                                     <Download className="w-3.5 h-3.5" />
-                                     <span>Export</span>
-                                   </SelectTrigger>
-                                  <SelectContent>
-                                    <div className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground uppercase">HTML Reports</div>
-                                    <SelectItem value="html-professional">Professional</SelectItem>
-                                    <SelectItem value="html-modern">Modern</SelectItem>
-                                    <SelectItem value="html-classic">Classic</SelectItem>
-                                    <div className="h-px bg-muted my-1" />
-                                    <div className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground uppercase">Data Files</div>
-                                    <SelectItem value="excel">Excel Export</SelectItem>
-                                    <SelectItem value="rtf">Bilingual RTF</SelectItem>
-                                  </SelectContent>
-                                </Select>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <button className="w-[95px] h-8 rounded-full text-[11px] font-black gap-1 flex items-center justify-center border border-border/60 hover:bg-accent transition-colors">
+                                      <Download className="w-3.5 h-3.5" />
+                                      <span>Export</span>
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-48 bg-card border border-border/60 shadow-lg rounded-xl p-1 z-[110]">
+                                    <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">HTML Reports</DropdownMenuLabel>
+                                    <DropdownMenuItem className="cursor-pointer text-[11px] font-bold px-2 py-1.5 rounded-lg hover:bg-accent focus:bg-accent" onClick={() => exportReport('html-professional')}>Professional</DropdownMenuItem>
+                                    <DropdownMenuItem className="cursor-pointer text-[11px] font-bold px-2 py-1.5 rounded-lg hover:bg-accent focus:bg-accent" onClick={() => exportReport('html-modern')}>Modern</DropdownMenuItem>
+                                    <DropdownMenuItem className="cursor-pointer text-[11px] font-bold px-2 py-1.5 rounded-lg hover:bg-accent focus:bg-accent" onClick={() => exportReport('html-classic')}>Classic</DropdownMenuItem>
+                                    <DropdownMenuSeparator className="h-px bg-muted my-1" />
+                                    <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Data Files</DropdownMenuLabel>
+                                    <DropdownMenuItem className="cursor-pointer text-[11px] font-bold px-2 py-1.5 rounded-lg hover:bg-accent focus:bg-accent" onClick={() => exportReport('excel')}>Excel Export</DropdownMenuItem>
+                                    <DropdownMenuItem className="cursor-pointer text-[11px] font-bold px-2 py-1.5 rounded-lg hover:bg-accent focus:bg-accent" onClick={() => exportReport('rtf')}>Bilingual RTF</DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               </div>
                             </div>
                           </CardHeader>

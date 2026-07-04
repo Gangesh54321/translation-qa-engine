@@ -10,6 +10,24 @@ export default defineConfig({
   },
   base: '/',
   plugins: [react()],
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'framer-motion',
+      'lucide-react',
+      'embla-carousel-autoplay',
+      'embla-carousel-react',
+      'exceljs',
+      'xlsx',
+      'jspdf',
+      'jspdf-autotable',
+      'jszip',
+      'recharts',
+      'react-hook-form',
+      'zod'
+    ]
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

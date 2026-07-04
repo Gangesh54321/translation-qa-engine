@@ -1723,47 +1723,65 @@ export default function App() {
                 className="max-w-[1750px] mx-auto px-12 lg:px-24"
               >
                 <div id="home" className="py-12 lg:py-20 space-y-24">
-                  {/* Top Section: Text Only (Centered) */}
-                  <div className="max-w-4xl mx-auto text-center space-y-10">
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-black uppercase tracking-[0.25em]"
-                    >
-                      <Zap className="w-3.5 h-3.5" />
-                      Linguistic Intelligence Platform
-                    </motion.div>
-                    
-                    <div className="space-y-3">
-                      <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-[0.9] text-slate-900 dark:text-white uppercase">
-                        TransTech <br />
-                        <span className="text-primary text-3xl md:text-5xl">QA Engine</span>
-                      </h1>
-                      <p className="text-xs font-black text-slate-500 uppercase tracking-[0.2em]">
-                        Smart Quality Checks for Translations.
-                      </p>
-                    </div>
-                      
-                    <p className="text-base text-muted-foreground leading-relaxed font-medium">
-                      TransTech QA Engine is an <strong className="text-slate-900 dark:text-white">industrial-grade linguistic intelligence platform</strong> designed for high-precision translation auditing. Supporting over <strong className="text-slate-900 dark:text-white">100 languages</strong> with extensive <em className="text-primary italic">built-in dictionaries</em>, it integrates <strong className="text-slate-900 dark:text-white">AI-enhanced spell check</strong>, <em className="text-primary italic">custom glossaries</em>, and <strong className="text-slate-900 dark:text-white">multi-format support</strong> to ensure flawless localized content at scale.
-                    </p>
-
-                    <div className="pt-4 flex justify-center">
-                      <Button 
-                        onClick={() => {
-                          if (user) {
-                            navigateTo('/qa');
-                            setShowDashboard(false);
-                            setHasStartedQA(true);
-                          } else {
-                            setShowAuth(true);
-                          }
-                        }}
-                        className="px-10 py-5 bg-primary hover:bg-primary/90 text-white font-black text-base rounded-full shadow-[0_20px_50px_-10px_rgba(255,92,0,0.4)] transition-all hover:scale-105 active:scale-95 flex items-center gap-4 group"
+                  {/* Top Section: Text & Hero Image (2 Columns) */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center max-w-7xl mx-auto">
+                    {/* Left: Text & CTA */}
+                    <div className="lg:col-span-7 text-center lg:text-left space-y-8">
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-black uppercase tracking-[0.25em]"
                       >
-                        Launch QA Engine
-                        <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
-                      </Button>
+                        <Zap className="w-3.5 h-3.5" />
+                        Linguistic Intelligence Platform
+                      </motion.div>
+                      
+                      <div className="space-y-3">
+                        <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter leading-none text-slate-900 dark:text-white uppercase">
+                          TransTech <span className="text-primary">QA Engine</span>
+                        </h1>
+                        <p className="text-xs font-black text-slate-500 uppercase tracking-[0.2em]">
+                          Smart Quality Checks for Translations.
+                        </p>
+                      </div>
+                        
+                      <p className="text-base text-muted-foreground leading-relaxed font-medium max-w-2xl mx-auto lg:mx-0">
+                        TransTech QA Engine is an <strong className="text-slate-900 dark:text-white">industrial-grade linguistic intelligence platform</strong> designed for high-precision translation auditing. Supporting over <strong className="text-slate-900 dark:text-white">100 languages</strong> with extensive <em className="text-primary italic">built-in dictionaries</em>, it integrates <strong className="text-slate-900 dark:text-white">AI-enhanced spell check</strong>, <em className="text-primary italic">custom glossaries</em>, and <strong className="text-slate-900 dark:text-white">multi-format support</strong> to ensure flawless localized content at scale.
+                      </p>
+
+                      <div className="pt-4 flex justify-center lg:justify-start">
+                        <Button 
+                          onClick={() => {
+                            if (user) {
+                              navigateTo('/qa');
+                              setShowDashboard(false);
+                              setHasStartedQA(true);
+                            } else {
+                              setShowAuth(true);
+                            }
+                          }}
+                          className="px-10 py-5 bg-primary hover:bg-primary/90 text-white font-black text-base rounded-full shadow-[0_20px_50px_-10px_rgba(255,92,0,0.4)] transition-all hover:scale-105 active:scale-95 flex items-center gap-4 group"
+                        >
+                          Launch QA Engine
+                          <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Right: Hand-drawn Illustration Image */}
+                    <div className="lg:col-span-5 flex justify-center">
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.2 }}
+                        className="relative w-full max-w-[450px] aspect-square rounded-[2.5rem] overflow-hidden shadow-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-2"
+                      >
+                        <img 
+                          src="/assets/translation-services-illustration.jpg" 
+                          alt="Translation Services Illustration" 
+                          className="w-full h-full object-cover rounded-[2rem] hover:scale-105 transition-transform duration-700 ease-out"
+                        />
+                      </motion.div>
                     </div>
                   </div>
 
